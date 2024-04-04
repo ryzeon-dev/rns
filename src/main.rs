@@ -6,8 +6,8 @@ use std::io::{Read, Write};
 use std::thread;
 use std::sync::{Arc, Mutex};
 
-const STD_PORTS: [u16; 13] = [
-    20, 22, 80, 143, 443, 465, 1080, 1194, 3306, 5432, 7329, 9050, 51820
+const STD_PORTS: [u16; 14] = [
+    20, 22, 80, 143, 443, 465, 1080, 1194, 3306, 5432, 7329, 9050, 9100, 51820
 ];
 
 fn explainPorts() {
@@ -24,6 +24,7 @@ fn explainPorts() {
     println!("    5432   PostgreSQL");
     println!("    7329   Docker proxy");
     println!("    9050   TOR proxy");
+    println!("    9100   Printers default port");
     println!("    51820  Wireguard VPN");
     println!("!!! These ports are usually assigned to these functions, but they might have been reassigned");
 }
@@ -152,11 +153,17 @@ fn main() {
    
     if args.contains(&"-h".to_string()) || args.contains(&"--help".to_string()) {
         println!("rns: Rust Network Scan");
-        println!("usage: rns IPv4 NETMASK [OPTIONS]");
+        println!("usage: rns [-s|--single] IPv4 [NETMASK] [OPTIONS]");
         println!("\noptions:");
         println!("    -std              Only check standard ports");
+        println!("    -s | --single     Only check the specified address");
         println!("    -e | --explain    Explain standard ports");
         println!("    -h | --help       Show this message and exit");
+        println!("\nexamples:");
+        println!("- scan the entire network");
+        println!("    $ rns 192.168.1.0 255.255.255.0 -std");
+        println!("- scan all ports on single address");
+        println!("    $ rns -s 192.168.1.10");
         std::process::exit(0);
     }
     
@@ -180,6 +187,35 @@ fn main() {
         }
     }
 
+    match args.iter().position(|str| *str == "-s".to_string() || *str == "--single".to_string()) {
+        None => {},
+        Some(index) => {
+            args.remove(index);
+            
+            let threads = Arc::new(Mutex::new(0_usize));
+            let report = Arc::new(Mutex::new(Vec::<String>::new()));
+            
+            let address = args.get(index).unwrap();
+            println!("[*] Checking single IP {}", address);
+            
+            if stdPorts {
+                println!("[*] Checking ports: {:?}\n", STD_PORTS);
+            } else {
+                println!("[*] Checking all ports (0-65535)\n");
+            }
+
+            check(makeu8Vec(address.to_owned()), &stdPorts, threads, Arc::clone(&report));
+
+            println!("\n[*] Final report:\n");
+
+            for line in &*report.lock().unwrap() {
+                println!("{}", line);
+            }
+
+            std::process::exit(0);
+        }
+    }
+
     let ip = makeu8Vec(args[1].clone());
     let mask = makeu8Vec(args[2].clone());
     let inverseMask = makeInverseMask(&mask);
@@ -199,7 +235,6 @@ fn main() {
         println!("[*] Checking all ports (0-65535)\n");
     }
     
-
     let mut current = baseIP.clone();
     let threads = Arc::new(Mutex::new(0_usize));
     let report = Arc::new(Mutex::new(Vec::<String>::new()));

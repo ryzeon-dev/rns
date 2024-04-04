@@ -49,6 +49,10 @@ rns 192.168.1.25 255.255.255.0
 ```
 rns 192.168.1.25 255.255.255.0 -std
 ```
+- to check a single address run:
+```
+rns -s 192.168.1.10
+```
 - to get an explanation for the standard ports run :
 ```
 rns --explain 
