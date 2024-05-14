@@ -6,13 +6,13 @@ use std::io::{Read, Write};
 use std::thread;
 use std::sync::{Arc, Mutex};
 
-const STD_PORTS: [u16; 13] = [
-    20, 22, 80, 143, 443, 465, 1080, 1194, 3306, 5432, 7329, 9050, 51820
+const STD_PORTS: [u16; 14] = [
+    20, 21, 22, 80, 143, 443, 465, 1080, 1194, 3306, 5432, 7329, 9050, 51820
 ];
 
 fn explainPorts() {
     println!("Standard ports explanation:");
-    println!("    20     FTP data transfer");
+    println!("    20,21  FTP data transfer");
     println!("    22     SSH");
     println!("    80     HTTP");
     println!("    143    IMAP");
