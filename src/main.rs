@@ -1,18 +1,19 @@
 #![allow(non_snake_case, unused_imports, unused_must_use, unused_variables)]
 
-use std::net::{SocketAddr, TcpStream, Shutdown};
+use std::net::{SocketAddr, TcpStream, Shutdown, ToSocketAddrs};
+use std::net;
 use std::time::Duration;
 use std::io::{Read, Write};
 use std::thread;
 use std::sync::{Arc, Mutex};
 
-const STD_PORTS: [u16; 14] = [
-    20, 22, 80, 143, 443, 465, 1080, 1194, 3306, 5432, 7329, 9050, 9100, 51820
+const STD_PORTS: [u16; 15] = [
+    20, 21, 22, 80, 143, 443, 465, 1080, 1194, 3306, 5432, 7329, 9050, 9100, 51820
 ];
 
 fn explainPorts() {
     println!("Standard ports explanation:");
-    println!("    20     FTP data transfer");
+    println!("    20, 21 FTP data transfer");
     println!("    22     SSH");
     println!("    80     HTTP");
     println!("    143    IMAP");
@@ -96,13 +97,14 @@ fn ipToString(ip: &Vec<u8>) -> String {
     res.join(".").to_string()
 }
 
-fn check(ip: Vec<u8>, std: &bool, threads: Arc<Mutex<usize>>, report: Arc<Mutex<Vec<String>>>) {
+fn check(ip: Vec<u8>, std: &bool, threads: Arc<Mutex<usize>>, report: Arc<Mutex<Vec<String>>>, singleAddress: bool) {
     *threads.lock().unwrap() += 1;
 
     let formattedIP = {[ip[0], ip[1], ip[2], ip[3]]};
     let addr = &SocketAddr::from((formattedIP, 80));
+
     match TcpStream::connect_timeout(
-        addr, 
+        addr,
         Duration::from_millis(1000)
     ) {
         Err(why) => {
@@ -137,14 +139,18 @@ fn check(ip: Vec<u8>, std: &bool, threads: Arc<Mutex<usize>>, report: Arc<Mutex<
             match TcpStream::connect_timeout(&SocketAddr::from((formattedIP, port)), Duration::from_millis(100)) {
                 Ok(sock) => {
                     open.push(port);
+
                     sock.shutdown(Shutdown::Both);
+                    println!("[*] Open port found: {}", port);
                 },
                 _ => {}
             }
         }
     }
-    
-    report.lock().unwrap().push(format!("[*] Found {}, open ports: {:?}", ipToString(&ip), open));
+
+    report.lock().unwrap().push(format!(
+        "[*] Found {} open ports: {:?}", ipToString(&ip), open)
+    );
     *threads.lock().unwrap() -= 1;
 }
 
@@ -204,7 +210,7 @@ fn main() {
                 println!("[*] Checking all ports (0-65535)\n");
             }
 
-            check(makeu8Vec(address.to_owned()), &stdPorts, threads, Arc::clone(&report));
+            check(makeu8Vec(address.to_owned()), &stdPorts, threads, Arc::clone(&report), true);
 
             println!("\n[*] Final report:\n");
 
@@ -214,6 +220,11 @@ fn main() {
 
             std::process::exit(0);
         }
+    }
+
+    if args.len() < 3 {
+        println!("Too few arguments");
+        std::process::exit(0);
     }
 
     let ip = makeu8Vec(args[1].clone());
@@ -246,7 +257,7 @@ fn main() {
         let reportClone = Arc::clone(&report);
 
         thread::spawn(move ||{
-            check(ipClone, &stdPorts, mutexClone, reportClone);
+            check(ipClone, &stdPorts, mutexClone, reportClone, false);
         });
 
         thread::sleep(Duration::from_millis(25));
