@@ -1,7 +1,6 @@
 #![allow(non_snake_case, unused_imports, unused_must_use, unused_variables)]
 
-use std::net::{SocketAddr, TcpStream, Shutdown, ToSocketAddrs};
-use std::net;
+use std::net::{SocketAddr, TcpStream, Shutdown};
 use std::time::Duration;
 use std::io::{Read, Write};
 use std::thread;
@@ -139,7 +138,6 @@ fn check(ip: Vec<u8>, std: &bool, threads: Arc<Mutex<usize>>, report: Arc<Mutex<
             match TcpStream::connect_timeout(&SocketAddr::from((formattedIP, port)), Duration::from_millis(100)) {
                 Ok(sock) => {
                     open.push(port);
-
                     sock.shutdown(Shutdown::Both);
                     println!("[*] Open port found: {}", port);
                 },
