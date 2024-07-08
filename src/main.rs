@@ -1,10 +1,10 @@
-#![allow(non_snake_case, unused_imports, unused_must_use, unused_variables)]
+#![allow(non_snake_case, unused_must_use)]
 
 use std::net::{SocketAddr, TcpStream, Shutdown};
 use std::time::Duration;
-use std::io::{Read, Write};
 use std::thread;
 use std::sync::{Arc, Mutex};
+use regex;
 
 const STD_PORTS: [u16; 15] = [
     20, 21, 22, 80, 143, 443, 465, 1080, 1194, 3306, 5432, 7329, 9050, 9100, 51820
@@ -96,7 +96,7 @@ fn ipToString(ip: &Vec<u8>) -> String {
     res.join(".").to_string()
 }
 
-fn check(ip: Vec<u8>, std: &bool, threads: Arc<Mutex<usize>>, report: Arc<Mutex<Vec<String>>>, singleAddress: bool) {
+fn check(ip: Vec<u8>, std: &bool, threads: Arc<Mutex<usize>>, report: Arc<Mutex<Vec<String>>>) {
     *threads.lock().unwrap() += 1;
 
     let formattedIP = {[ip[0], ip[1], ip[2], ip[3]]};
@@ -117,7 +117,7 @@ fn check(ip: Vec<u8>, std: &bool, threads: Arc<Mutex<usize>>, report: Arc<Mutex<
             }
         },
 
-        Ok(sock) => {}
+        Ok(_sock) => {}
     }
     println!("[*] {} found responsive", ipToString(&ip));
 
@@ -152,6 +152,38 @@ fn check(ip: Vec<u8>, std: &bool, threads: Arc<Mutex<usize>>, report: Arc<Mutex<
     *threads.lock().unwrap() -= 1;
 }
 
+fn maskFromCidr(cidr: u8) -> Vec<u8> {
+    let mut bits = Vec::<u8>::new();
+    let mut mask = Vec::<u8>::new();
+
+    for i in 0_u8..32_u8 {
+        if i < cidr {
+            bits.push(1_u8);
+        } else {
+            bits.push(0_u8)
+        }
+    }
+
+    let mut index: usize = 0;
+    while index < 32 {
+        let mut chunk = bits[index..index+8].to_vec();
+        chunk.reverse();
+
+        let mut bit = 0;
+        let mut byte = 0_u8;
+
+        while bit < 8 {
+            byte += chunk[bit] * 2_i32.pow(bit as u32) as u8;
+            bit += 1;
+        }
+
+        mask.push(byte);
+        index += 8;
+    }
+
+    return mask;
+}
+
 fn main() {
     let mut args = std::env::args().collect::<Vec::<String>>();
    
@@ -163,9 +195,13 @@ fn main() {
         println!("    -s | --single     Only check the specified address");
         println!("    -e | --explain    Explain standard ports");
         println!("    -h | --help       Show this message and exit");
+        println!("\nnotes:");
+        println!("    NetMask can be specified in both IP address form");
+        println!("    (e.g. 255.255.255.0) and CIDR form (e.g. 24)");
         println!("\nexamples:");
         println!("- scan the entire network");
         println!("    $ rns 192.168.1.0 255.255.255.0 -std");
+        println!("    $ rns 192.168.1.0 24 -std");
         println!("- scan all ports on single address");
         println!("    $ rns -s 192.168.1.10");
         std::process::exit(0);
@@ -208,8 +244,7 @@ fn main() {
                 println!("[*] Checking all ports (0-65535)\n");
             }
 
-            check(makeu8Vec(address.to_owned()), &stdPorts, threads, Arc::clone(&report), true);
-
+            check(makeu8Vec(address.to_owned()), &stdPorts, threads, Arc::clone(&report));
             println!("\n[*] Final report:\n");
 
             for line in &*report.lock().unwrap() {
@@ -226,7 +261,20 @@ fn main() {
     }
 
     let ip = makeu8Vec(args[1].clone());
-    let mask = makeu8Vec(args[2].clone());
+    let netmask = args[2].clone();
+
+    let mask: Vec<u8>;
+    if regex::Regex::new(r"([0-9]{1,3}\.){3}[0-9]{1,3}").unwrap().clone().is_match(netmask.as_str()) {
+        mask = makeu8Vec(netmask);
+
+    } else if regex::Regex::new(r"[0-9]{1,2}").unwrap().clone().is_match(netmask.as_str()) {
+        mask = maskFromCidr(netmask.parse::<u8>().unwrap());
+
+    } else {
+        println!("Netmask must be in ip address form or in cidr form");
+        std::process::exit(0);
+    }
+
     let inverseMask = makeInverseMask(&mask);
 
     let baseIP = makeBaseIP(&ip, &mask);
@@ -236,7 +284,7 @@ fn main() {
     println!("[*] IP mask: {}", ipToString(&inverseMask));
 
     println!("[*] Base IP: {}", ipToString(&baseIP));
-    println!("[*] End IP: {}\n", ipToString(&endIP));
+    println!("[*] Broadcast IP: {}\n", ipToString(&endIP));
 
     if stdPorts {
         println!("[*] Checking ports: {:?}\n", STD_PORTS);
@@ -255,7 +303,7 @@ fn main() {
         let reportClone = Arc::clone(&report);
 
         thread::spawn(move ||{
-            check(ipClone, &stdPorts, mutexClone, reportClone, false);
+            check(ipClone, &stdPorts, mutexClone, reportClone);
         });
 
         thread::sleep(Duration::from_millis(25));

@@ -40,10 +40,11 @@ sudo make install
 
 
 ## Usage
-- give any IP address from the network you want to scan, and the relative netmask
+- give any IP address from the network you want to scan, and the relative netmask (note that mask can be specified in both IP address and CIDR form)
 
 ```
 rns 192.168.1.25 255.255.255.0
+rns 192.168.1.25 24
 ```
 - to only check the standard ports add `-std` flag
 ```
