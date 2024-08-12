@@ -1,13 +1,16 @@
-#![allow(non_snake_case, unused_must_use)]
+#![allow(non_snake_case, unused_must_use, dead_code)]
+
+mod threadpool;
 
 use std::net::{SocketAddr, TcpStream, Shutdown};
 use std::time::Duration;
 use std::thread;
 use std::sync::{Arc, Mutex};
+use std::thread::sleep;
 use regex;
 
-const STD_PORTS: [u16; 15] = [
-    20, 21, 22, 80, 143, 443, 465, 1080, 1194, 3306, 5432, 7329, 9050, 9100, 51820
+const STD_PORTS: [u16; 16] = [
+    20, 21, 22, 80, 143, 443, 445, 465, 1080, 1194, 3306, 5432, 7329, 9050, 9100, 51820
 ];
 
 fn explainPorts() {
@@ -17,6 +20,7 @@ fn explainPorts() {
     println!("    80     HTTP");
     println!("    143    IMAP");
     println!("    443    HTTPS");
+    println!("    445    SMB");
     println!("    465    SMTP");
     println!("    1080   Socks proxy");
     println!("    1194   OpenVPN");
@@ -96,7 +100,7 @@ fn ipToString(ip: &Vec<u8>) -> String {
     res.join(".").to_string()
 }
 
-fn check(ip: Vec<u8>, std: &bool, threads: Arc<Mutex<usize>>, report: Arc<Mutex<Vec<String>>>) {
+fn check(ip: Vec<u8>, ports: Vec<u16>, threads: Arc<Mutex<usize>>, report: Arc<Mutex<Vec<String>>>, singleAddress: bool) {
     *threads.lock().unwrap() += 1;
 
     let formattedIP = {[ip[0], ip[1], ip[2], ip[3]]};
@@ -121,23 +125,55 @@ fn check(ip: Vec<u8>, std: &bool, threads: Arc<Mutex<usize>>, report: Arc<Mutex<
     }
     println!("[*] {} found responsive", ipToString(&ip));
 
-    let mut open = Vec::<u16>::new();
+    let open = Arc::new(Mutex::new(Vec::<u16>::new()));
 
-    if *std {
-        for port in STD_PORTS {
-            match TcpStream::connect_timeout(&SocketAddr::from((formattedIP, port)), Duration::from_millis(100)) {
-                Ok(sock) => {
-                    open.push(port);
-                    sock.shutdown(Shutdown::Both);
-                },
-                _ => {}
-            }
+    if singleAddress {
+        let threadCount = thread::available_parallelism().unwrap().get();
+
+        let portThreadPool = threadpool::ThreadPool::new(threadCount);
+        let runningThreads = Arc::new(Mutex::new(0));
+
+        let mut startPortIndex = 0;
+        let portsChunk = if &threadCount > &ports.len() { 1 } else { &ports.len() / threadCount };
+
+        while startPortIndex < (&ports.len()).to_owned() {
+            let runningThreadsClone = runningThreads.clone();
+            let openClone = open.clone();
+            let portsClone = ports.clone();
+
+            portThreadPool.exec(move || {
+                *runningThreadsClone.lock().unwrap() += 1;
+
+                for port in &portsClone[startPortIndex..startPortIndex + portsChunk] {
+                    match TcpStream::connect_timeout(&SocketAddr::from((formattedIP, *port as u16)), Duration::from_millis(100)) {
+
+                        Ok(sock) => {
+                            openClone.lock().unwrap().push(*port as u16);
+                            sock.shutdown(Shutdown::Both);
+                            println!("[*] Open port found: {}", port);
+                        },
+
+                        _ => {}
+                    }
+                }
+
+                *runningThreadsClone.lock().unwrap() -= 1;
+            });
+            startPortIndex += portsChunk;
         }
+
+        sleep(Duration::from_millis(100));
+
+        while *runningThreads.lock().unwrap() > 0 {
+            sleep(Duration::from_millis(100));
+        }
+
+
     } else {
-        for port in 0..65535 {
+        for port in ports {
             match TcpStream::connect_timeout(&SocketAddr::from((formattedIP, port)), Duration::from_millis(100)) {
                 Ok(sock) => {
-                    open.push(port);
+                    open.lock().unwrap().push(port as u16);
                     sock.shutdown(Shutdown::Both);
                     println!("[*] Open port found: {}", port);
                 },
@@ -146,8 +182,10 @@ fn check(ip: Vec<u8>, std: &bool, threads: Arc<Mutex<usize>>, report: Arc<Mutex<
         }
     }
 
+
+
     report.lock().unwrap().push(format!(
-        "[*] Found {} open ports: {:?}", ipToString(&ip), open)
+        "[*] Found {} open ports: {:?}", ipToString(&ip), open.lock().unwrap().to_vec())
     );
     *threads.lock().unwrap() -= 1;
 }
@@ -191,10 +229,12 @@ fn main() {
         println!("rns: Rust Network Scan");
         println!("usage: rns [-s|--single] IPv4 [NETMASK] [OPTIONS]");
         println!("\noptions:");
-        println!("    -std              Only check standard ports");
-        println!("    -s | --single     Only check the specified address");
-        println!("    -e | --explain    Explain standard ports");
-        println!("    -h | --help       Show this message and exit");
+        println!("    -std                         Only check standard ports");
+        println!("    -s  | --single               Only check the specified address");
+        println!("    -e  | --explain              Explain standard ports");
+        println!("    -p  | --ports PORTS          List of ports to scam, comma separated");
+        println!("    -pr | --ports-range PORTS    Range of ports, comma separated");
+        println!("    -h  | --help                 Show this message and exit");
         println!("\nnotes:");
         println!("    NetMask can be specified in both IP address form");
         println!("    (e.g. 255.255.255.0) and CIDR form (e.g. 24)");
@@ -204,6 +244,11 @@ fn main() {
         println!("    $ rns 192.168.1.0 24 -std");
         println!("- scan all ports on single address");
         println!("    $ rns -s 192.168.1.10");
+        println!("- scan only ports in the range 1000-9999 on the entire network");
+        println!("    $ rns 192.168.1.0 24 -pr 1000,9999");
+        println!("- scan only certain ports on single address");
+        println!("    $ rns -s 192.168.1.10 -p 80,8080,8088,8888,8808");
+
         std::process::exit(0);
     }
     
@@ -217,13 +262,97 @@ fn main() {
         std::process::exit(1);
     }
     
-    let mut stdPorts = false;
+    let ports: Vec<u16>;
+    let mut allPorts = false;
 
-    match args.iter().position(|str| *str == "-std".to_string()) {
-        None => {},
-        Some(index) => {
-            stdPorts = true;
-            args.remove(index);
+    if args.contains(&"-std".to_string()) {
+        ports = STD_PORTS.clone().to_vec();
+        
+    } else if args.contains(&"--ports".to_string()) || args.contains(&"-p".to_string()) {
+        let flagIndex = {
+            let mut index: usize = 0;
+
+            for arg in &args {
+                if *arg == "--ports".to_string() || *arg == "-p".to_string() {
+                    break
+                }
+
+                index += 1;
+            }
+
+            index
+        };
+
+        args.remove(flagIndex);
+        ports = {
+            let stringPorts = args.remove(flagIndex);
+            let mut uPorts = Vec::<u16>::new();
+
+            for port in stringPorts.split(",") {
+
+                match port.parse::<u16>() {
+                    Err(_) => {
+                        println!("Error: port '{}' is not a valid port", port);
+                    },
+                    Ok(p) => {
+                        uPorts.push(p);
+                    }
+                }
+            }
+            uPorts
+        };
+    } else if args.contains(&"-pr".to_string()) || args.contains(&"--ports-range".to_string()) {
+        let flagIndex = {
+            let mut index: usize = 0;
+
+            for arg in &args {
+                if *arg == "-pr".to_string() || *arg == "--ports-range".to_string() {
+                    break
+                }
+
+                index += 1;
+            }
+
+            index
+        };
+
+        args.remove(flagIndex);
+        ports = {
+            let stringPorts = args.remove(flagIndex);
+            let splitted = stringPorts.split(",").collect::<Vec<&str>>();
+            println!("splitted : {:?}", &splitted);
+            let startPort = match splitted.get(0).unwrap().parse::<u16>() {
+                Err(_) => {
+                    println!("Error: port '{}' is not a valid port", splitted[0]);
+                    std::process::exit(0);
+                },
+                Ok(p) => p
+            };
+
+            let endPort = match splitted.get(1).unwrap().parse::<u16>() {
+                Err(_) => {
+                    println!("Error: port '{}' is not a valid port", splitted[1]);
+                    std::process::exit(0);
+                },
+                Ok(p) => p
+            };
+
+            let mut range = Vec::<u16>::new();
+            for port in startPort..endPort {
+                range.push(port);
+            }
+            range
+        };
+    } else {
+        allPorts = true;
+        ports = {
+            let mut temp = Vec::<u16>::new();
+
+            for port in 0..65536 {
+                temp.push(port as u16);
+            }
+
+            temp
         }
     }
 
@@ -238,13 +367,20 @@ fn main() {
             let address = args.get(index).unwrap();
             println!("[*] Checking single IP {}", address);
             
-            if stdPorts {
-                println!("[*] Checking ports: {:?}\n", STD_PORTS);
+            if !allPorts {
+                println!("[*] Checking ports: {}\n", {
+                    if &ports.len() < &20 {
+                        format!("{:?}", &ports)
+                    } else {
+                        format!("[{} -> {}]", &ports.first().unwrap(), &ports.last().unwrap())
+                    }
+                });
+
             } else {
                 println!("[*] Checking all ports (0-65535)\n");
             }
 
-            check(makeu8Vec(address.to_owned()), &stdPorts, threads, Arc::clone(&report));
+            check(makeu8Vec(address.to_owned()), ports, threads, Arc::clone(&report), true);
             println!("\n[*] Final report:\n");
 
             for line in &*report.lock().unwrap() {
@@ -281,13 +417,21 @@ fn main() {
     let endIP = makeEndIP(&ip, &inverseMask);
 
     println!("[*] Netmask: {}", ipToString(&mask));
-    println!("[*] IP mask: {}", ipToString(&inverseMask));
+    println!("[*] Hostmask: {}", ipToString(&inverseMask));
 
     println!("[*] Base IP: {}", ipToString(&baseIP));
     println!("[*] Broadcast IP: {}\n", ipToString(&endIP));
 
-    if stdPorts {
-        println!("[*] Checking ports: {:?}\n", STD_PORTS);
+    if !allPorts {
+        println!("[*] Checking ports: {}\n", {
+            if &ports.len() < &20 {
+                format!("{:?}", &ports)
+
+            } else {
+                format!("[{} -> {}]", &ports.first().unwrap(), &ports.last().unwrap())
+            }
+        });
+
     } else {
         println!("[*] Checking all ports (0-65535)\n");
     }
@@ -301,12 +445,14 @@ fn main() {
 
         let mutexClone = Arc::clone(&threads);
         let reportClone = Arc::clone(&report);
+        let portsClone = ports.clone();
 
         thread::spawn(move ||{
-            check(ipClone, &stdPorts, mutexClone, reportClone);
+            check(ipClone, portsClone,
+                  mutexClone, reportClone, false);
         });
 
-        thread::sleep(Duration::from_millis(25));
+        //thread::sleep(Duration::from_millis(25));
         current = increment(&current);
     }
 

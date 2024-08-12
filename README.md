@@ -50,7 +50,18 @@ rns 192.168.1.25 24
 ```
 rns 192.168.1.25 255.255.255.0 -std
 ```
-- to check a single address run:
+
+- to only check certain ports use the `-p` or `--ports` flag followed by the list of ports, comma separated
+```
+rns 192.168.1.25 24 -p 80,8080,8088,8808,8888
+```
+
+- to check a port range use the `-pr` or `--ports-range` flag, followed by the starting port and the ending port (which is excluded), comma separated
+```
+rns 192.168.1.25 24 -pr 1000,10000
+```
+- 
+- to check a single address run (any of the previous flags can be also used with a single address):
 ```
 rns -s 192.168.1.10
 ```
