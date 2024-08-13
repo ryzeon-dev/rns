@@ -9,14 +9,15 @@ use std::sync::{Arc, Mutex};
 use std::thread::sleep;
 use regex;
 
-const STD_PORTS: [u16; 16] = [
-    20, 21, 22, 80, 143, 443, 445, 465, 1080, 1194, 3306, 5432, 7329, 9050, 9100, 51820
+const STD_PORTS: [u16; 17] = [
+    20, 21, 22, 53, 80, 143, 443, 445, 465, 1080, 1194, 3306, 5432, 7329, 9050, 9100, 51820
 ];
 
 fn explainPorts() {
     println!("Standard ports explanation:");
     println!("    20, 21 FTP data transfer");
     println!("    22     SSH");
+    println!("    53     DNS");
     println!("    80     HTTP");
     println!("    143    IMAP");
     println!("    443    HTTPS");
