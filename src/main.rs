@@ -145,7 +145,8 @@ fn check(ip: Vec<u8>, ports: Vec<u16>, threads: Arc<Mutex<usize>>, report: Arc<M
             portThreadPool.exec(move || {
                 *runningThreadsClone.lock().unwrap() += 1;
 
-                for port in &portsClone[startPortIndex..startPortIndex + portsChunk] {
+                let range = if startPortIndex + portsChunk < portsClone.len() { portsClone[startPortIndex..startPortIndex + portsChunk].to_vec() } else { portsClone[startPortIndex..].to_vec() };
+                for port in &range {
                     match TcpStream::connect_timeout(&SocketAddr::from((formattedIP, *port as u16)), Duration::from_millis(100)) {
 
                         Ok(sock) => {
