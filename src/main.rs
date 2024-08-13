@@ -101,7 +101,7 @@ fn ipToString(ip: &Vec<u8>) -> String {
     res.join(".").to_string()
 }
 
-fn check(ip: Vec<u8>, ports: Vec<u16>, threads: Arc<Mutex<usize>>, report: Arc<Mutex<Vec<String>>>, singleAddress: bool) {
+fn check(ip: Vec<u8>, ports: Vec<u16>, threads: Arc<Mutex<usize>>, report: Arc<Mutex<Vec<String>>>, singleAddress: bool, hostTimeout: u64, portTimeout: u64) {
     *threads.lock().unwrap() += 1;
 
     let formattedIP = {[ip[0], ip[1], ip[2], ip[3]]};
@@ -109,7 +109,7 @@ fn check(ip: Vec<u8>, ports: Vec<u16>, threads: Arc<Mutex<usize>>, report: Arc<M
 
     match TcpStream::connect_timeout(
         addr,
-        Duration::from_millis(1000)
+        Duration::from_millis(hostTimeout)
     ) {
         Err(why) => {
             match why.kind() {
@@ -147,7 +147,7 @@ fn check(ip: Vec<u8>, ports: Vec<u16>, threads: Arc<Mutex<usize>>, report: Arc<M
 
                 let range = if startPortIndex + portsChunk < portsClone.len() { portsClone[startPortIndex..startPortIndex + portsChunk].to_vec() } else { portsClone[startPortIndex..].to_vec() };
                 for port in &range {
-                    match TcpStream::connect_timeout(&SocketAddr::from((formattedIP, *port as u16)), Duration::from_millis(100)) {
+                    match TcpStream::connect_timeout(&SocketAddr::from((formattedIP, *port)), Duration::from_millis(portTimeout)) {
 
                         Ok(sock) => {
                             openClone.lock().unwrap().push(*port as u16);
@@ -173,7 +173,7 @@ fn check(ip: Vec<u8>, ports: Vec<u16>, threads: Arc<Mutex<usize>>, report: Arc<M
 
     } else {
         for port in ports {
-            match TcpStream::connect_timeout(&SocketAddr::from((formattedIP, port)), Duration::from_millis(100)) {
+            match TcpStream::connect_timeout(&SocketAddr::from((formattedIP, port)), Duration::from_millis(portTimeout)) {
                 Ok(sock) => {
                     open.lock().unwrap().push(port as u16);
                     sock.shutdown(Shutdown::Both);
@@ -231,12 +231,14 @@ fn main() {
         println!("rns: Rust Network Scan");
         println!("usage: rns [-s|--single] IPv4 [NETMASK] [OPTIONS]");
         println!("\noptions:");
-        println!("    -std                         Only check standard ports");
-        println!("    -s  | --single               Only check the specified address");
-        println!("    -e  | --explain              Explain standard ports");
-        println!("    -p  | --ports PORTS          List of ports to scam, comma separated");
-        println!("    -pr | --ports-range PORTS    Range of ports, comma separated");
-        println!("    -h  | --help                 Show this message and exit");
+        println!("    -std                             Only check standard ports");
+        println!("    -s  | --single                   Only check the specified address");
+        println!("    -e  | --explain                  Explain standard ports");
+        println!("    -p  | --ports PORTS              List of ports to scam, comma separated");
+        println!("    -pr | --ports-range PORTS        Range of ports to scan, comma separated");
+        println!("    -pt | --port-timeout TIMEOUT     Port scanning timeout (milliseconds), default 100");
+        println!("    -ht | --host-timeout TIMEOUT     Time to wait for host to answer (milliseconds), default 1000");
+        println!("    -h  | --help                     Show this message and exit");
         println!("\nnotes:");
         println!("    NetMask can be specified in both IP address form");
         println!("    (e.g. 255.255.255.0) and CIDR form (e.g. 24)");
@@ -322,7 +324,7 @@ fn main() {
         ports = {
             let stringPorts = args.remove(flagIndex);
             let splitted = stringPorts.split(",").collect::<Vec<&str>>();
-            println!("splitted : {:?}", &splitted);
+
             let startPort = match splitted.get(0).unwrap().parse::<u16>() {
                 Err(_) => {
                     println!("Error: port '{}' is not a valid port", splitted[0]);
@@ -358,6 +360,51 @@ fn main() {
         }
     }
 
+    let hostTimeout: u64;
+    if args.contains(&"-ht".to_string()) || args.contains(&"--host-timeout".to_string()) {
+        let flagIndex = {
+            let mut index: usize = 0_usize;
+
+            for arg in &args {
+                if *arg == "-ht".to_string() || *arg == "--host-timeout".to_string() {
+                    break
+                }
+                index += 1;
+            }
+
+            index
+        };
+
+        args.remove(flagIndex);
+        hostTimeout = args.remove(flagIndex).parse::<u64>().unwrap();
+
+    } else {
+        hostTimeout = 1000_u64;
+    }
+
+    let portTimeout: u64;
+    if args.contains(&"-pt".to_string()) || args.contains(&"--port-timeout".to_string()) {
+        let flagIndex = {
+            let mut index: usize = 0_usize;
+
+            for arg in &args {
+                if *arg == "-pt".to_string() || *arg == "--port-timeout".to_string() {
+                    break
+                }
+                index += 1;
+            }
+
+            index
+        };
+
+        args.remove(flagIndex);
+        portTimeout = args.remove(flagIndex).parse::<u64>().unwrap();
+
+    } else {
+        portTimeout = 100_u64;
+    }
+
+
     match args.iter().position(|str| *str == "-s".to_string() || *str == "--single".to_string()) {
         None => {},
         Some(index) => {
@@ -382,7 +429,7 @@ fn main() {
                 println!("[*] Checking all ports (0-65535)\n");
             }
 
-            check(makeu8Vec(address.to_owned()), ports, threads, Arc::clone(&report), true);
+            check(makeu8Vec(address.to_owned()), ports, threads, Arc::clone(&report), true, hostTimeout, portTimeout);
             println!("\n[*] Final report:\n");
 
             for line in &*report.lock().unwrap() {
@@ -450,19 +497,26 @@ fn main() {
         let portsClone = ports.clone();
 
         thread::spawn(move ||{
-            check(ipClone, portsClone,
-                  mutexClone, reportClone, false);
+            check(
+                ipClone, portsClone, mutexClone, reportClone,
+                false, hostTimeout, portTimeout
+            );
         });
 
-        //thread::sleep(Duration::from_millis(25));
         current = increment(&current);
     }
 
     while *threads.lock().unwrap() != 0_usize {
-        thread::sleep(Duration::from_millis(100));
+        sleep(Duration::from_millis(100));
     }
 
     println!("\n[*] Final report:\n");
+
+    println!("[*] Netmask: {}", ipToString(&mask));
+    println!("[*] Hostmask: {}", ipToString(&inverseMask));
+
+    println!("[*] Base IP: {}", ipToString(&baseIP));
+    println!("[*] Broadcast IP: {}\n", ipToString(&endIP));
 
     for line in &*report.lock().unwrap() {
         println!("{}", line);
