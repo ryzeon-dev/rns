@@ -42,7 +42,7 @@ fn makeu8Vec(ip: String) -> Vec<u8> {
         uIP.push(octet.parse::<u8>().unwrap())
     }
 
-    return uIP;
+    return uIP
 }
 
 fn makeBaseIP(ip: &Vec<u8>, mask: &Vec<u8>) -> Vec<u8> {
@@ -305,6 +305,7 @@ fn main() {
             }
             uPorts
         };
+
     } else if args.contains(&"-pr".to_string()) || args.contains(&"--ports-range".to_string()) {
         let flagIndex = {
             let mut index: usize = 0;
@@ -316,7 +317,6 @@ fn main() {
 
                 index += 1;
             }
-
             index
         };
 
@@ -404,7 +404,6 @@ fn main() {
         portTimeout = 100_u64;
     }
 
-
     match args.iter().position(|str| *str == "-s".to_string() || *str == "--single".to_string()) {
         None => {},
         Some(index) => {
@@ -442,22 +441,41 @@ fn main() {
 
     if args.len() < 3 {
         println!("Too few arguments");
-        std::process::exit(0);
+        std::process::exit(1);
     }
 
-    let ip = makeu8Vec(args[1].clone());
-    let netmask = args[2].clone();
+    let ip;
+    let rawIP = args.get(1);
+
+    if rawIP != None {
+        ip = makeu8Vec(rawIP.unwrap().to_owned());
+
+    } else {
+        println!("No ip address provided");
+        std::process::exit(1);
+    }
+
+    let netmask;
+    let mask = args.get(2);
+
+    if mask != None {
+        netmask = mask.unwrap();
+
+    } else {
+        println!("No netmask provided");
+        std::process::exit(1);
+    }
 
     let mask: Vec<u8>;
     if regex::Regex::new(r"([0-9]{1,3}\.){3}[0-9]{1,3}").unwrap().clone().is_match(netmask.as_str()) {
-        mask = makeu8Vec(netmask);
+        mask = makeu8Vec(netmask.to_owned());
 
     } else if regex::Regex::new(r"[0-9]{1,2}").unwrap().clone().is_match(netmask.as_str()) {
         mask = maskFromCidr(netmask.parse::<u8>().unwrap());
 
     } else {
         println!("Netmask must be in ip address form or in cidr form");
-        std::process::exit(0);
+        std::process::exit(1);
     }
 
     let inverseMask = makeInverseMask(&mask);
@@ -491,8 +509,8 @@ fn main() {
 
     while current != endIP {
         let ipClone = current.clone();
-
         let mutexClone = Arc::clone(&threads);
+
         let reportClone = Arc::clone(&report);
         let portsClone = ports.clone();
 
