@@ -2,12 +2,15 @@
 
 mod threadpool;
 
-use std::net::{SocketAddr, TcpStream, Shutdown};
+use std::net::{SocketAddr, TcpStream, Shutdown, Ipv4Addr};
 use std::time::Duration;
 use std::thread;
 use std::sync::{Arc, Mutex};
 use std::thread::sleep;
 use regex;
+use libarp;
+use std::str::FromStr;
+
 
 const STD_PORTS: [u16; 17] = [
     20, 21, 22, 53, 80, 143, 443, 445, 465, 1080, 1194, 3306, 5432, 7329, 9050, 9100, 51820
@@ -101,7 +104,7 @@ fn ipToString(ip: &Vec<u8>) -> String {
     res.join(".").to_string()
 }
 
-fn check(ip: Vec<u8>, ports: Vec<u16>, threads: Arc<Mutex<usize>>, report: Arc<Mutex<Vec<String>>>, singleAddress: bool, hostTimeout: u64, portTimeout: u64) {
+fn check(ip: Vec<u8>, ports: Vec<u16>, threads: Arc<Mutex<usize>>, report: Arc<Mutex<Vec<String>>>, singleAddress: bool, hostTimeout: u64, portTimeout: u64, checkMac: bool) {
     *threads.lock().unwrap() += 1;
 
     let formattedIP = {[ip[0], ip[1], ip[2], ip[3]]};
@@ -177,18 +180,27 @@ fn check(ip: Vec<u8>, ports: Vec<u16>, threads: Arc<Mutex<usize>>, report: Arc<M
                 Ok(sock) => {
                     open.lock().unwrap().push(port as u16);
                     sock.shutdown(Shutdown::Both);
-                    println!("[*] Open port found: {}", port);
+                    println!("[*] {} Open port found: {}", ipToString(&ip), port);
                 },
                 _ => {}
             }
         }
     }
 
+    let mac;
+    if checkMac {
+        mac = arpScanIp(ipToString(&ip));
 
+    } else {
+        mac = String::new();
+    }
 
     report.lock().unwrap().push(format!(
-        "[*] Found {} open ports: {:?}", ipToString(&ip), open.lock().unwrap().to_vec())
+        "[>] Found {}{} open ports: {:?}", ipToString(&ip),
+        if mac.is_empty() { String::new() } else { format!(" ({})", mac) },
+        open.lock().unwrap().to_vec())
     );
+
     *threads.lock().unwrap() -= 1;
 }
 
@@ -224,6 +236,19 @@ fn maskFromCidr(cidr: u8) -> Vec<u8> {
     return mask;
 }
 
+fn arpScanIp<T: ToString>(ip: T) -> String {
+    let mut arpClient = libarp::client::ArpClient::new().unwrap();
+    let res = arpClient.ip_to_mac(
+        Ipv4Addr::from_str(ip.to_string().as_str()).unwrap(),
+        Some(Duration::from_millis(100))
+    );
+
+    match res {
+        Err(_) => String::new(),
+        Ok(mac) => mac.to_string()
+    }
+}
+
 fn main() {
     let mut args = std::env::args().collect::<Vec::<String>>();
    
@@ -231,14 +256,15 @@ fn main() {
         println!("rns: Rust Network Scan");
         println!("usage: rns [-s|--single] IPv4 [NETMASK] [OPTIONS]");
         println!("\noptions:");
-        println!("    -std                             Only check standard ports");
-        println!("    -s  | --single                   Only check the specified address");
         println!("    -e  | --explain                  Explain standard ports");
+        println!("    -h  | --help                     Show this message and exit");
+        println!("    -ht | --host-timeout TIMEOUT     Time to wait for host to answer (milliseconds), default 1000");
+        println!("    -m  | --mac                      Scan MAC address if possible (requires root)");
         println!("    -p  | --ports PORTS              List of ports to scam, comma separated");
         println!("    -pr | --ports-range PORTS        Range of ports to scan, comma separated");
         println!("    -pt | --port-timeout TIMEOUT     Port scanning timeout (milliseconds), default 100");
-        println!("    -ht | --host-timeout TIMEOUT     Time to wait for host to answer (milliseconds), default 1000");
-        println!("    -h  | --help                     Show this message and exit");
+        println!("    -s  | --single                   Only check the specified address");
+        println!("    -std                             Only check standard ports");
         println!("\nnotes:");
         println!("    NetMask can be specified in both IP address form");
         println!("    (e.g. 255.255.255.0) and CIDR form (e.g. 24)");
@@ -404,6 +430,27 @@ fn main() {
         portTimeout = 100_u64;
     }
 
+    let checkMac;
+    if args.contains(&"-m".to_string()) || args.contains(&"--mac".to_string()) {
+
+        let flagIndex = {
+            let mut index: usize = 0_usize;
+            for arg in &args {
+                if *arg == "-m".to_string() || *arg == "--mac".to_string() {
+                    break
+                }
+                index += 1;
+            }
+            index
+        };
+
+        args.remove(flagIndex);
+        checkMac = true;
+
+    } else {
+        checkMac = false;
+    }
+
     match args.iter().position(|str| *str == "-s".to_string() || *str == "--single".to_string()) {
         None => {},
         Some(index) => {
@@ -428,7 +475,7 @@ fn main() {
                 println!("[*] Checking all ports (0-65535)\n");
             }
 
-            check(makeu8Vec(address.to_owned()), ports, threads, Arc::clone(&report), true, hostTimeout, portTimeout);
+            check(makeu8Vec(address.to_owned()), ports, threads, Arc::clone(&report), true, hostTimeout, portTimeout, checkMac);
             println!("\n[*] Final report:\n");
 
             for line in &*report.lock().unwrap() {
@@ -517,7 +564,7 @@ fn main() {
         thread::spawn(move ||{
             check(
                 ipClone, portsClone, mutexClone, reportClone,
-                false, hostTimeout, portTimeout
+                false, hostTimeout, portTimeout, checkMac
             );
         });
 
@@ -530,11 +577,11 @@ fn main() {
 
     println!("\n[*] Final report:\n");
 
-    println!("[*] Netmask: {}", ipToString(&mask));
-    println!("[*] Hostmask: {}", ipToString(&inverseMask));
+    println!("[>] Netmask: {}", ipToString(&mask));
+    println!("[>] Hostmask: {}", ipToString(&inverseMask));
 
-    println!("[*] Base IP: {}", ipToString(&baseIP));
-    println!("[*] Broadcast IP: {}\n", ipToString(&endIP));
+    println!("[>] Base IP: {}", ipToString(&baseIP));
+    println!("[>] Broadcast IP: {}\n", ipToString(&endIP));
 
     for line in &*report.lock().unwrap() {
         println!("{}", line);
