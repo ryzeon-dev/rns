@@ -11,7 +11,7 @@ use regex;
 use libarp;
 use std::str::FromStr;
 
-const VERSION: &str = "0.7.1";
+const VERSION: &str = "0.7.2";
 const STD_PORTS: [u16; 17] = [
     20, 21, 22, 53, 80, 143, 443, 445, 465, 1080, 1194, 3306, 5432, 7329, 9050, 9100, 51820
 ];
@@ -176,6 +176,7 @@ fn check(ip: Vec<u8>, ports: Vec<u16>, threads: Arc<Mutex<usize>>, report: Arc<M
 
     } else {
         for port in ports {
+
             match TcpStream::connect_timeout(&SocketAddr::from((formattedIP, port)), Duration::from_millis(portTimeout)) {
                 Ok(sock) => {
                     open.lock().unwrap().push(port as u16);
@@ -237,7 +238,13 @@ fn maskFromCidr(cidr: u8) -> Vec<u8> {
 }
 
 fn arpScanIp<T: ToString>(ip: T) -> String {
-    let mut arpClient = libarp::client::ArpClient::new().unwrap();
+    let mut arpClient;
+
+    match libarp::client::ArpClient::new() {
+        Err(_) => return String::new(),
+        Ok(client) => { arpClient = client }
+    }
+
     let res = arpClient.ip_to_mac(
         Ipv4Addr::from_str(ip.to_string().as_str()).unwrap(),
         Some(Duration::from_millis(100))
