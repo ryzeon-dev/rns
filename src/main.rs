@@ -11,7 +11,7 @@ use regex;
 use libarp;
 use std::str::FromStr;
 
-
+const VERSION: &str = "0.7.1";
 const STD_PORTS: [u16; 17] = [
     20, 21, 22, 53, 80, 143, 443, 445, 465, 1080, 1194, 3306, 5432, 7329, 9050, 9100, 51820
 ];
@@ -253,7 +253,7 @@ fn main() {
     let mut args = std::env::args().collect::<Vec::<String>>();
    
     if args.contains(&"-h".to_string()) || args.contains(&"--help".to_string()) {
-        println!("rns: Rust Network Scan");
+        println!("rns: Rust Network Scan version {VERSION}");
         println!("usage: rns [-s|--single] IPv4 [NETMASK] [OPTIONS]");
         println!("\noptions:");
         println!("    -e  | --explain                  Explain standard ports");
@@ -265,6 +265,7 @@ fn main() {
         println!("    -pt | --port-timeout TIMEOUT     Port scanning timeout (milliseconds), default 100");
         println!("    -s  | --single                   Only check the specified address");
         println!("    -std                             Only check standard ports");
+        println!("    -v  | --version                  Display version and exit");
         println!("\nnotes:");
         println!("    NetMask can be specified in both IP address form");
         println!("    (e.g. 255.255.255.0) and CIDR form (e.g. 24)");
@@ -279,6 +280,11 @@ fn main() {
         println!("- scan only certain ports on single address");
         println!("    $ rns -s 192.168.1.10 -p 80,8080,8088,8888,8808");
 
+        std::process::exit(0);
+    }
+
+    if args.contains(&"-v".to_string()) || args.contains(&"--version".to_string()) {
+        println!("version: {VERSION}");
         std::process::exit(0);
     }
     
