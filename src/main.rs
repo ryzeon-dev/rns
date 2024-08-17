@@ -11,7 +11,7 @@ use regex;
 use libarp;
 use std::str::FromStr;
 
-const VERSION: &str = "0.7.2";
+const VERSION: &str = "0.7.3";
 const STD_PORTS: [u16; 17] = [
     20, 21, 22, 53, 80, 143, 443, 445, 465, 1080, 1194, 3306, 5432, 7329, 9050, 9100, 51820
 ];
@@ -256,6 +256,224 @@ fn arpScanIp<T: ToString>(ip: T) -> String {
     }
 }
 
+struct Args {
+    ip: String,
+    single: bool,
+    mask: String,
+    ports: Vec<u16>,
+    allPorts: bool,
+    scanMac: bool,
+    hostTimeout: u64,
+    portTimeout: u64
+}
+
+impl Args {
+    fn new() -> Args {
+        Args {
+            ip: String::new(),
+            single: false,
+            mask: String::new(),
+            ports: Vec::<u16>::new(),
+            allPorts: false,
+            scanMac: false,
+            hostTimeout: 1000,
+            portTimeout: 100
+        }
+    }
+
+    fn parse(args: &mut Vec<String>) -> Args {
+        let mut arguments = Args::new();
+
+        if args.contains(&"-std".to_string()) {
+            arguments.ports = STD_PORTS.clone().to_vec();
+
+        } else if args.contains(&"--ports".to_string()) || args.contains(&"-p".to_string()) {
+            let flagIndex = {
+                let mut index: usize = 0;
+
+                for arg in &mut *args {
+                    if *arg == "--ports".to_string() || *arg == "-p".to_string() {
+                        break
+                    }
+
+                    index += 1;
+                }
+
+                index
+            };
+
+            args.remove(flagIndex);
+            arguments.ports = {
+                let stringPorts = args.remove(flagIndex);
+                let mut uPorts = Vec::<u16>::new();
+
+                for port in stringPorts.split(",") {
+
+                    match port.parse::<u16>() {
+                        Err(_) => {
+                            println!("Error: port '{}' is not a valid port", port);
+                        },
+                        Ok(p) => {
+                            uPorts.push(p);
+                        }
+                    }
+                }
+                uPorts
+            };
+
+        } else if args.contains(&"-pr".to_string()) || args.contains(&"--ports-range".to_string()) {
+            let flagIndex = {
+                let mut index: usize = 0;
+
+                for arg in &mut *args {
+                    if *arg == "-pr".to_string() || *arg == "--ports-range".to_string() {
+                        break
+                    }
+
+                    index += 1;
+                }
+                index
+            };
+
+            args.remove(flagIndex);
+            arguments.ports = {
+                let stringPorts = args.remove(flagIndex);
+                let splitted = stringPorts.split(",").collect::<Vec<&str>>();
+
+                let startPort = match splitted.get(0).unwrap().parse::<u16>() {
+                    Err(_) => {
+                        println!("Error: port '{}' is not a valid port", splitted[0]);
+                        std::process::exit(0);
+                    },
+                    Ok(p) => p
+                };
+
+                let endPort = match splitted.get(1).unwrap().parse::<u16>() {
+                    Err(_) => {
+                        println!("Error: port '{}' is not a valid port", splitted[1]);
+                        std::process::exit(0);
+                    },
+                    Ok(p) => p
+                };
+
+                let mut range = Vec::<u16>::new();
+                for port in startPort..endPort {
+                    range.push(port);
+                }
+                range
+            };
+        } else {
+            arguments.allPorts = true;
+            arguments.ports = {
+                let mut temp = Vec::<u16>::new();
+
+                for port in 0..65536 {
+                    temp.push(port as u16);
+                }
+
+                temp
+            }
+        }
+
+        if args.contains(&"-ht".to_string()) || args.contains(&"--host-timeout".to_string()) {
+            let flagIndex = {
+                let mut index: usize = 0_usize;
+
+                for arg in &mut *args {
+                    if *arg == "-ht".to_string() || *arg == "--host-timeout".to_string() {
+                        break
+                    }
+                    index += 1;
+                }
+
+                index
+            };
+
+            args.remove(flagIndex);
+            arguments.hostTimeout = args.remove(flagIndex).parse::<u64>().unwrap();
+
+        } else {
+            arguments.hostTimeout = 1000_u64;
+        }
+
+        if args.contains(&"-pt".to_string()) || args.contains(&"--port-timeout".to_string()) {
+            let flagIndex = {
+                let mut index: usize = 0_usize;
+
+                for arg in &mut *args {
+                    if *arg == "-pt".to_string() || *arg == "--port-timeout".to_string() {
+                        break
+                    }
+                    index += 1;
+                }
+
+                index
+            };
+
+            args.remove(flagIndex);
+            arguments.portTimeout = args.remove(flagIndex).parse::<u64>().unwrap();
+
+        } else {
+            arguments.portTimeout = 100_u64;
+        }
+
+        if args.contains(&"-m".to_string()) || args.contains(&"--mac".to_string()) {
+
+            let flagIndex = {
+                let mut index: usize = 0_usize;
+                for arg in &mut *args {
+                    if *arg == "-m".to_string() || *arg == "--mac".to_string() {
+                        break
+                    }
+                    index += 1;
+                }
+                index
+            };
+
+            args.remove(flagIndex);
+            arguments.scanMac = true;
+
+        } else {
+            arguments.scanMac = false;
+        }
+
+        if args.contains(&"-s".to_string()) || args.contains(&"--single".to_string()) {
+            let flagIndex = {
+                let mut index = 0_usize;
+
+                for arg in &mut *args {
+                    if *arg == "-s".to_string() || *arg == "--single".to_string() {
+                        break;
+                    }
+                    index += 1;
+                }
+                index
+            };
+
+            args.remove(flagIndex);
+            arguments.single = true;
+        }
+
+        if args.get(1) == None {
+            println!("No ip address provided");
+            std::process::exit(1);
+        } else {
+            arguments.ip = args.get(1).unwrap().to_string();
+        }
+
+        if args.get(2) == None {
+            if ! arguments.single {
+                println!("No netmask provided");
+                std::process::exit(1);
+            }
+        } else {
+            arguments.mask = args.get(2).unwrap().to_string();
+        }
+
+        arguments
+    }
+}
+
 fn main() {
     let mut args = std::env::args().collect::<Vec::<String>>();
    
@@ -305,226 +523,39 @@ fn main() {
         std::process::exit(1);
     }
     
-    let ports: Vec<u16>;
-    let mut allPorts = false;
+    let arguments = Args::parse(&mut args);
 
-    if args.contains(&"-std".to_string()) {
-        ports = STD_PORTS.clone().to_vec();
-        
-    } else if args.contains(&"--ports".to_string()) || args.contains(&"-p".to_string()) {
-        let flagIndex = {
-            let mut index: usize = 0;
+    if arguments.single {
+        let threads = Arc::new(Mutex::new(0_usize));
+        let report = Arc::new(Mutex::new(Vec::<String>::new()));
 
-            for arg in &args {
-                if *arg == "--ports".to_string() || *arg == "-p".to_string() {
-                    break
+        println!("[*] Checking single IP {}", arguments.ip);
+
+        if !arguments.allPorts {
+            println!("[*] Checking ports: {}\n", {
+                if &arguments.ports.len() < &20 {
+                    format!("{:?}", &arguments.ports)
+                } else {
+                    format!("[{} -> {}]", &arguments.ports.first().unwrap(), &arguments.ports.last().unwrap())
                 }
+            });
 
-                index += 1;
-            }
-
-            index
-        };
-
-        args.remove(flagIndex);
-        ports = {
-            let stringPorts = args.remove(flagIndex);
-            let mut uPorts = Vec::<u16>::new();
-
-            for port in stringPorts.split(",") {
-
-                match port.parse::<u16>() {
-                    Err(_) => {
-                        println!("Error: port '{}' is not a valid port", port);
-                    },
-                    Ok(p) => {
-                        uPorts.push(p);
-                    }
-                }
-            }
-            uPorts
-        };
-
-    } else if args.contains(&"-pr".to_string()) || args.contains(&"--ports-range".to_string()) {
-        let flagIndex = {
-            let mut index: usize = 0;
-
-            for arg in &args {
-                if *arg == "-pr".to_string() || *arg == "--ports-range".to_string() {
-                    break
-                }
-
-                index += 1;
-            }
-            index
-        };
-
-        args.remove(flagIndex);
-        ports = {
-            let stringPorts = args.remove(flagIndex);
-            let splitted = stringPorts.split(",").collect::<Vec<&str>>();
-
-            let startPort = match splitted.get(0).unwrap().parse::<u16>() {
-                Err(_) => {
-                    println!("Error: port '{}' is not a valid port", splitted[0]);
-                    std::process::exit(0);
-                },
-                Ok(p) => p
-            };
-
-            let endPort = match splitted.get(1).unwrap().parse::<u16>() {
-                Err(_) => {
-                    println!("Error: port '{}' is not a valid port", splitted[1]);
-                    std::process::exit(0);
-                },
-                Ok(p) => p
-            };
-
-            let mut range = Vec::<u16>::new();
-            for port in startPort..endPort {
-                range.push(port);
-            }
-            range
-        };
-    } else {
-        allPorts = true;
-        ports = {
-            let mut temp = Vec::<u16>::new();
-
-            for port in 0..65536 {
-                temp.push(port as u16);
-            }
-
-            temp
+        } else {
+            println!("[*] Checking all ports (0-65535)\n");
         }
-    }
 
-    let hostTimeout: u64;
-    if args.contains(&"-ht".to_string()) || args.contains(&"--host-timeout".to_string()) {
-        let flagIndex = {
-            let mut index: usize = 0_usize;
+        check(makeu8Vec(arguments.ip.to_owned()), arguments.ports, threads, Arc::clone(&report), true, arguments.hostTimeout, arguments.portTimeout, arguments.scanMac);
+        println!("\n[*] Final report:\n");
 
-            for arg in &args {
-                if *arg == "-ht".to_string() || *arg == "--host-timeout".to_string() {
-                    break
-                }
-                index += 1;
-            }
-
-            index
-        };
-
-        args.remove(flagIndex);
-        hostTimeout = args.remove(flagIndex).parse::<u64>().unwrap();
-
-    } else {
-        hostTimeout = 1000_u64;
-    }
-
-    let portTimeout: u64;
-    if args.contains(&"-pt".to_string()) || args.contains(&"--port-timeout".to_string()) {
-        let flagIndex = {
-            let mut index: usize = 0_usize;
-
-            for arg in &args {
-                if *arg == "-pt".to_string() || *arg == "--port-timeout".to_string() {
-                    break
-                }
-                index += 1;
-            }
-
-            index
-        };
-
-        args.remove(flagIndex);
-        portTimeout = args.remove(flagIndex).parse::<u64>().unwrap();
-
-    } else {
-        portTimeout = 100_u64;
-    }
-
-    let checkMac;
-    if args.contains(&"-m".to_string()) || args.contains(&"--mac".to_string()) {
-
-        let flagIndex = {
-            let mut index: usize = 0_usize;
-            for arg in &args {
-                if *arg == "-m".to_string() || *arg == "--mac".to_string() {
-                    break
-                }
-                index += 1;
-            }
-            index
-        };
-
-        args.remove(flagIndex);
-        checkMac = true;
-
-    } else {
-        checkMac = false;
-    }
-
-    match args.iter().position(|str| *str == "-s".to_string() || *str == "--single".to_string()) {
-        None => {},
-        Some(index) => {
-            args.remove(index);
-            
-            let threads = Arc::new(Mutex::new(0_usize));
-            let report = Arc::new(Mutex::new(Vec::<String>::new()));
-            
-            let address = args.get(index).unwrap();
-            println!("[*] Checking single IP {}", address);
-            
-            if !allPorts {
-                println!("[*] Checking ports: {}\n", {
-                    if &ports.len() < &20 {
-                        format!("{:?}", &ports)
-                    } else {
-                        format!("[{} -> {}]", &ports.first().unwrap(), &ports.last().unwrap())
-                    }
-                });
-
-            } else {
-                println!("[*] Checking all ports (0-65535)\n");
-            }
-
-            check(makeu8Vec(address.to_owned()), ports, threads, Arc::clone(&report), true, hostTimeout, portTimeout, checkMac);
-            println!("\n[*] Final report:\n");
-
-            for line in &*report.lock().unwrap() {
-                println!("{}", line);
-            }
-
-            std::process::exit(0);
+        for line in &*report.lock().unwrap() {
+            println!("{}", line);
         }
+
+        std::process::exit(0);
     }
 
-    if args.len() < 3 {
-        println!("Too few arguments");
-        std::process::exit(1);
-    }
-
-    let ip;
-    let rawIP = args.get(1);
-
-    if rawIP != None {
-        ip = makeu8Vec(rawIP.unwrap().to_owned());
-
-    } else {
-        println!("No ip address provided");
-        std::process::exit(1);
-    }
-
-    let netmask;
-    let mask = args.get(2);
-
-    if mask != None {
-        netmask = mask.unwrap();
-
-    } else {
-        println!("No netmask provided");
-        std::process::exit(1);
-    }
+    let ip = makeu8Vec(arguments.ip.to_owned());
+    let netmask = arguments.mask;
 
     let mask: Vec<u8>;
     if regex::Regex::new(r"([0-9]{1,3}\.){3}[0-9]{1,3}").unwrap().clone().is_match(netmask.as_str()) {
@@ -549,13 +580,13 @@ fn main() {
     println!("[*] Base IP: {}", ipToString(&baseIP));
     println!("[*] Broadcast IP: {}\n", ipToString(&endIP));
 
-    if !allPorts {
+    if !arguments.allPorts {
         println!("[*] Checking ports: {}\n", {
-            if &ports.len() < &20 {
-                format!("{:?}", &ports)
+            if &arguments.ports.len() < &20 {
+                format!("{:?}", &arguments.ports)
 
             } else {
-                format!("[{} -> {}]", &ports.first().unwrap(), &ports.last().unwrap())
+                format!("[{} -> {}]", &arguments.ports.first().unwrap(), &arguments.ports.last().unwrap())
             }
         });
 
@@ -572,12 +603,12 @@ fn main() {
         let mutexClone = Arc::clone(&threads);
 
         let reportClone = Arc::clone(&report);
-        let portsClone = ports.clone();
+        let portsClone = arguments.ports.clone();
 
         thread::spawn(move ||{
             check(
                 ipClone, portsClone, mutexClone, reportClone,
-                false, hostTimeout, portTimeout, checkMac
+                false, arguments.hostTimeout, arguments.portTimeout, arguments.scanMac
             );
         });
 
