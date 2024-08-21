@@ -1,4 +1,9 @@
+<img src="https://img.shields.io/badge/rust-16a085?style=for-the-badge&logo=rust" href="" />
+<img src="https://img.shields.io/badge/tcp/ip-16a085?style=for-the-badge" href="" />
+<img src="https://img.shields.io/badge/mac%20address-16a085?style=for-the-badge" href="" />
+
 # rns - Rust Network Scan
+
 - TCP scanning tool written in rust 
 
 ## Installation
