@@ -1,6 +1,8 @@
-<img src="https://img.shields.io/badge/rust-16a085?style=for-the-badge&logo=rust" href="" />
-<img src="https://img.shields.io/badge/tcp/ip-16a085?style=for-the-badge" href="" />
-<img src="https://img.shields.io/badge/mac%20address-16a085?style=for-the-badge" href="" />
+<div style="display: flex; flex-direction: row; justify-content: start">
+    <img src="https://img.shields.io/badge/rust-16a085?style=for-the-badge&logo=rust" href="" style="margin: 10px" />
+    <img src="https://img.shields.io/badge/tcp/ip-16a085?style=for-the-badge" href="" style="margin: 10px" />
+    <img src="https://img.shields.io/badge/mac%20address-16a085?style=for-the-badge" href="" style="margin: 10px"/>
+</div>
 
 # rns - Rust Network Scan
 
