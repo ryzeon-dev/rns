@@ -6,7 +6,7 @@
 
 # rns - Rust Network Scan
 
-- TCP scanning tool written in rust 
+- Network scanning tool written in rust 
 
 ## Installation
 - requires the following packages to be installed:
@@ -67,7 +67,14 @@ rns 192.168.1.25 24 -p 80,8080,8088,8808,8888
 ```
 rns 192.168.1.25 24 -pr 1000,10000
 ```
-- 
+
+- to check locally open ports use the `-l` or `--local` flag
+  - "tcp" or "udp" can be added as arguments, if missing both tcp and udp open ports will be shown
+```
+rns --local
+rns -l tcp
+```
+
 - to check a single address run (any of the previous flags can be also used with a single address):
 ```
 rns -s 192.168.1.10

@@ -1,17 +1,18 @@
-#![allow(non_snake_case, unused_must_use, dead_code)]
+#![allow(non_snake_case, unused_must_use, dead_code, unused_variables)]
 
 mod threadpool;
 
+use std::collections::HashMap;
 use std::net::{SocketAddr, TcpStream, Shutdown, Ipv4Addr};
 use std::time::Duration;
-use std::thread;
+use std::{fs, thread};
 use std::sync::{Arc, Mutex};
 use std::thread::sleep;
 use regex;
 use libarp;
 use std::str::FromStr;
 
-const VERSION: &str = "0.7.3";
+const VERSION: &str = "0.8.0";
 const STD_PORTS: [u16; 17] = [
     20, 21, 22, 53, 80, 143, 443, 445, 465, 1080, 1194, 3306, 5432, 7329, 9050, 9100, 51820
 ];
@@ -256,11 +257,144 @@ fn arpScanIp<T: ToString>(ip: T) -> String {
     }
 }
 
+fn hexByteToU8(hexa: &str) -> usize {
+    let chars = hexa.chars().collect::<Vec<char>>();
+
+    let first = {
+        let char = chars[0] as usize;
+        if char > 58 {
+            char - 55
+        } else {
+            char  - 48
+        }
+    };
+
+    let second = {
+        let char = chars[1] as usize;
+        if char > 58 {
+            char - 55
+        } else {
+            char  - 48
+        }
+    };
+
+    return first * 16 + second;
+}
+
+fn decodeAddress(address: String) -> String {
+    let chunks = vec![
+        &address[6..], &address[4..6], &address[2..4], &address[..2]
+    ];
+
+    let mut ip = String::new();
+    for chunk in chunks {
+        ip += format!("{}.", hexByteToU8(chunk)).as_str();
+    }
+
+    ip.remove(ip.len()-1);
+    ip
+}
+
+fn decodePort(port: String) -> String {
+    let chars = port.chars().collect::<Vec<char>>();
+
+    let first = {
+        let char = chars[0] as usize;
+        if char > 58 {
+            char - 55
+        } else {
+            char  - 48
+        }
+    };
+
+    let second = {
+        let char = chars[1] as usize;
+        if char > 58 {
+            char - 55
+        } else {
+            char  - 48
+        }
+    };
+
+    let third = {
+        let char = chars[2] as usize;
+        if char > 58 {
+            char - 55
+        } else {
+            char  - 48
+        }
+    };
+
+    let fourth = {
+        let char = chars[3] as usize;
+        if char > 58 {
+            char - 55
+        } else {
+            char  - 48
+        }
+    };
+
+    return (first * 16 * 16 * 16 + second * 16 * 16 + third * 16 + fourth).to_string();
+}
+
+fn getUid() -> usize {
+    let pid = std::process::id();
+    fs::read_to_string(format!("/proc/{pid}/loginuid")).unwrap().parse::<usize>().unwrap()
+}
+
+fn removeBlanks(list: &mut Vec<&str>) -> Vec<String> {
+    let mut new = Vec::<String>::new();
+
+    for element in list {
+        if !element.is_empty() {
+            new.push(element.to_string());
+        }
+    }
+
+    new
+}
+
+fn unpackLine(line: String) -> (String, String, String) {
+    let splitted = removeBlanks(&mut line.split(" ").collect::<Vec<&str>>());
+
+    let localPair = splitted.get(1).unwrap().split(":").collect::<Vec<&str>>();
+    let listenAddress = decodeAddress((&localPair[0]).to_string());
+
+    let listenPort = format!("{}", decodePort((&localPair[1]).to_string()));
+    let inode = splitted.get(9).unwrap().trim().to_string();
+
+    (listenAddress, listenPort, inode)
+}
+
+fn parseFile(filePath: String, tcp: bool) -> HashMap<String, (String, String)> {
+    let mut map = HashMap::<String, (String, String)>::new();
+    let file = fs::read_to_string(filePath).unwrap();
+
+    for line in file.split("\n") {
+        if line.is_empty() || !line.contains(":") {
+            continue
+        }
+
+        let splittedLine = removeBlanks(&mut line.split(" ").collect::<Vec<&str>>());
+        if (tcp && splittedLine[3] != "0A") || (!tcp && splittedLine[3] != "07") {
+            continue
+        }
+
+        let (address, port, inode) = unpackLine(line.to_string());
+        map.insert(inode, (address, port));
+    }
+
+    map
+}
+
+#[derive(Debug)]
 struct Args {
     ip: String,
     single: bool,
     mask: String,
     ports: Vec<u16>,
+    local: bool,
+    localProtocol: String,
     allPorts: bool,
     scanMac: bool,
     hostTimeout: u64,
@@ -274,6 +408,8 @@ impl Args {
             single: false,
             mask: String::new(),
             ports: Vec::<u16>::new(),
+            local: false,
+            localProtocol: String::new(),
             allPorts: false,
             scanMac: false,
             hostTimeout: 1000,
@@ -362,6 +498,39 @@ impl Args {
                 }
                 range
             };
+        } else if args.contains(&"-l".to_string()) || args.contains(&"--local".to_string()) {
+            arguments.local = true;
+
+            let flagIndex = {
+                let mut index: usize = 0;
+
+                for arg in &mut *args {
+                    if *arg == "-l".to_string() || *arg == "--local".to_string() {
+                        break
+                    }
+
+                    index += 1;
+                }
+                index
+            };
+
+            if flagIndex == args.len() - 1 {
+
+            } else if ["tcp", "udp"].contains(&args[flagIndex + 1].as_str()) {
+                let protocol = args[flagIndex + 1].as_str();
+
+                if protocol == "tcp" {
+                    arguments.localProtocol = "tcp".to_string();
+
+                } else if protocol == "udp" {
+                    arguments.localProtocol = "udp".to_string();
+
+                } else {
+                    println!("Error: wrong argument for flag `--local`. Allowed values are: tcp, udp");
+                    std::process::exit(1);
+                }
+            }
+
         } else {
             arguments.allPorts = true;
             arguments.ports = {
@@ -454,19 +623,11 @@ impl Args {
             arguments.single = true;
         }
 
-        if args.get(1) == None {
-            println!("No ip address provided");
-            std::process::exit(1);
-        } else {
+        if args.get(1) != None {
             arguments.ip = args.get(1).unwrap().to_string();
         }
 
-        if args.get(2) == None {
-            if ! arguments.single {
-                println!("No netmask provided");
-                std::process::exit(1);
-            }
-        } else {
+        if args.get(2) != None {
             arguments.mask = args.get(2).unwrap().to_string();
         }
 
@@ -484,6 +645,7 @@ fn main() {
         println!("    -e  | --explain                  Explain standard ports");
         println!("    -h  | --help                     Show this message and exit");
         println!("    -ht | --host-timeout TIMEOUT     Time to wait for host to answer (milliseconds), default 1000");
+        println!("    -l  | --local [PROTO]            Display open ports on local machine, can be restricted to a certain protocol");
         println!("    -m  | --mac                      Scan MAC address if possible (requires root)");
         println!("    -p  | --ports PORTS              List of ports to scam, comma separated");
         println!("    -pr | --ports-range PORTS        Range of ports to scan, comma separated");
@@ -504,6 +666,10 @@ fn main() {
         println!("    $ rns 192.168.1.0 24 -pr 1000,9999");
         println!("- scan only certain ports on single address");
         println!("    $ rns -s 192.168.1.10 -p 80,8080,8088,8888,8808");
+        println!("- display locally open tcp ports");
+        println!("    $ rns -l tcp");
+        println!("- displat all locally open ports");
+        println!("    $ rns --local");
 
         std::process::exit(0);
     }
@@ -517,13 +683,51 @@ fn main() {
         explainPorts();
         std::process::exit(0);
     }
-
-    if args.len() < 3 {
-        println!("Too few arguments");
-        std::process::exit(1);
-    }
     
     let arguments = Args::parse(&mut args);
+
+    if arguments.local {
+        let tcpMap = parseFile("/proc/net/tcp".to_string(), true);
+        let udpMap = parseFile("/proc/net/udp".to_string(), false);
+
+        let uid = getUid();
+
+        if arguments.localProtocol == String::from("tcp") {
+            if uid == 1000 {
+
+                println!("{:15} : {:5}", "ADDRESS", "PORT");
+                for (inode, (address, port)) in tcpMap {
+                    println!("{:15} : {:5}", address, port);
+                }
+            }
+
+        } else if arguments.localProtocol == String::from("udp") {
+            if uid == 1000 {
+
+                println!("{:15} : {:5}", "ADDRESS", "PORT");
+                for (inode, (address, port)) in udpMap {
+                    println!("{:15} : {:5}", address, port);
+                }
+            }
+
+        } else {
+            if uid == 1000 {
+                println!("{:15} : {:5}", "ADDRESS", "PORT");
+                println!("TCP");
+
+                for (inode, (address, port)) in tcpMap {
+                    println!("{:15} : {:5}", address, port);
+                }
+
+                println!("UDP");
+                for (inode, (address, port)) in udpMap {
+                    println!("{:15} : {:5}", address, port);
+                }
+            }
+        }
+
+        std::process::exit(0);
+    }
 
     if arguments.single {
         let threads = Arc::new(Mutex::new(0_usize));
