@@ -12,7 +12,7 @@ use regex;
 use libarp;
 use std::str::FromStr;
 
-const VERSION: &str = "0.8.0";
+const VERSION: &str = "0.8.1";
 const STD_PORTS: [u16; 17] = [
     20, 21, 22, 53, 80, 143, 443, 445, 465, 1080, 1194, 3306, 5432, 7329, 9050, 9100, 51820
 ];
@@ -637,7 +637,12 @@ impl Args {
 
 fn main() {
     let mut args = std::env::args().collect::<Vec::<String>>();
-   
+
+    if args.len() == 1 {
+        println!("Not enough arguments");
+        std::process::exit(1);
+    }
+
     if args.contains(&"-h".to_string()) || args.contains(&"--help".to_string()) {
         println!("rns: Rust Network Scan version {VERSION}");
         println!("usage: rns [-s|--single] IPv4 [NETMASK] [OPTIONS]");
