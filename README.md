@@ -68,6 +68,12 @@ rns 192.168.1.25 24 -p 80,8080,8088,8808,8888
 rns 192.168.1.25 24 -pr 1000,10000
 ```
 
+- to find the MAC address of the responsive IPs, pass the `-m` or `--mac` flag
+  - if ran as root, arp messages will be sent, otherwise cached macs will be used
+```
+rns 192.168.1.25 24 -std --mac
+```
+
 - to check locally open ports use the `-l` or `--local` flag
   - "tcp" or "udp" can be added as arguments, if missing both tcp and udp open ports will be shown
 ```

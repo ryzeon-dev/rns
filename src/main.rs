@@ -13,7 +13,7 @@ use regex;
 use libarp;
 use std::str::FromStr;
 
-const VERSION: &str = "0.8.2";
+const VERSION: &str = "0.8.3";
 const STD_PORTS: [u16; 17] = [
     20, 21, 22, 53, 80, 143, 443, 445, 465, 1080, 1194, 3306, 5432, 7329, 9050, 9100, 51820
 ];
@@ -190,16 +190,22 @@ fn check(ip: Vec<u8>, ports: Vec<u16>, threads: Arc<Mutex<usize>>, report: Arc<M
         }
     }
 
-    let mac;
+    let stringedIp = ipToString(&ip);
+    let mut mac;
+
     if checkMac {
-        mac = arpScanIp(ipToString(&ip));
+        mac = arpScanIp(&stringedIp);
+
+        if mac.is_empty() {
+            mac = getCachedArpMac(stringedIp.clone());
+        }
 
     } else {
         mac = String::new();
     }
 
     report.lock().unwrap().push(format!(
-        "[>] Found {}{} open ports: {:?}", ipToString(&ip),
+        "[>] Found {}{} open ports: {:?}", stringedIp,
         if mac.is_empty() { String::new() } else { format!(" ({})", mac) },
         open.lock().unwrap().to_vec())
     );
@@ -256,6 +262,29 @@ fn arpScanIp<T: ToString>(ip: T) -> String {
         Err(_) => String::new(),
         Ok(mac) => mac.to_string()
     }
+}
+
+fn getCachedArpMac<T: ToString>(targetIp: T) -> String {
+    let procNetArp = match std::fs::read_to_string("/proc/net/arp") {
+        Ok(arp) => arp,
+        Err(_) => return String::new()
+    };
+
+    for line in procNetArp.split("\n") {
+        if !line.contains(".") {
+            continue
+        }
+
+        let splitted = removeBlanks(&mut line.split(" ").collect::<Vec<&str>>());
+        let ip = splitted.get(0).unwrap().to_owned();
+        let mac = splitted.get(3).unwrap().to_owned();
+
+        if ip == targetIp.to_string() {
+            return mac;
+        }
+    }
+
+    return String::new();
 }
 
 fn hexByteToU8(hexa: &str) -> usize {
@@ -398,8 +427,8 @@ fn main() {
         println!("    -e  | --explain                  Explain standard ports");
         println!("    -h  | --help                     Show this message and exit");
         println!("    -ht | --host-timeout TIMEOUT     Time to wait for host to answer (milliseconds), default 1000");
-        println!("    -l  | --local [PROTO]            Display open ports on local machine, can be restricted to a certain protocol");
-        println!("    -m  | --mac                      Scan MAC address if possible (requires root)");
+        println!("    -l  | --local [PROTOCOL]         Display open ports on local machine, can be restricted to a certain protocol");
+        println!("    -m  | --mac                      Find MAC address if possible");
         println!("    -p  | --ports PORTS              List of ports to scam, comma separated");
         println!("    -pr | --ports-range PORTS        Range of ports to scan, comma separated");
         println!("    -pt | --port-timeout TIMEOUT     Port scanning timeout (milliseconds), default 100");
