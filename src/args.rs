@@ -60,7 +60,7 @@ impl Args {
 
                     match port.parse::<u16>() {
                         Err(_) => {
-                            println!("Error: port '{}' is not a valid port", port);
+                            println!("Port '{}' is not a valid port", port);
                         },
                         Ok(p) => {
                             uPorts.push(p);
@@ -91,7 +91,7 @@ impl Args {
 
                 let startPort = match splitted.get(0).unwrap().parse::<u16>() {
                     Err(_) => {
-                        println!("Error: port '{}' is not a valid port", splitted[0]);
+                        println!("Port '{}' is not a valid port", splitted[0]);
                         std::process::exit(0);
                     },
                     Ok(p) => p
@@ -99,7 +99,7 @@ impl Args {
 
                 let endPort = match splitted.get(1).unwrap().parse::<u16>() {
                     Err(_) => {
-                        println!("Error: port '{}' is not a valid port", splitted[1]);
+                        println!("Port '{}' is not a valid port", splitted[1]);
                         std::process::exit(0);
                     },
                     Ok(p) => p
@@ -138,10 +138,10 @@ impl Args {
                 } else if protocol == "udp" {
                     arguments.localProtocol = "udp".to_string();
 
-                } else {
-                    println!("Error: wrong argument for flag `--local`. Allowed values are: tcp, udp");
-                    std::process::exit(1);
                 }
+            } else {
+                println!("Bad argument '{}' for option `--local`. Allowed values are: tcp, udp", &args[flagIndex + 1]);
+                std::process::exit(1);
             }
 
         } else {

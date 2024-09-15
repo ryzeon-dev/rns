@@ -13,7 +13,7 @@ use regex;
 use libarp;
 use std::str::FromStr;
 
-const VERSION: &str = "0.8.3";
+const VERSION: &str = "0.8.4";
 const STD_PORTS: [u16; 17] = [
     20, 21, 22, 53, 80, 143, 443, 445, 465, 1080, 1194, 3306, 5432, 7329, 9050, 9100, 51820
 ];
@@ -487,7 +487,7 @@ fn main() {
             }
 
 
-        } else {
+        } else if arguments.localProtocol.is_empty() {
             println!("{:15} : {:5}", "ADDRESS", "PORT");
             println!("TCP");
 
@@ -499,6 +499,10 @@ fn main() {
             for (inode, (address, port)) in udpMap {
                 println!("{:15} : {:5}", address, port);
             }
+
+        } else {
+            println!("Bad argument '{}' for --local option", {arguments.localProtocol});
+            std::process::exit(1);
         }
 
         std::process::exit(0);
@@ -533,7 +537,18 @@ fn main() {
         std::process::exit(0);
     }
 
-    let ip = makeu8Vec(arguments.ip.to_owned());
+    let argumentIp = arguments.ip;
+    if argumentIp.starts_with("-") {
+        println!("Invalid option: '{}'", &argumentIp);
+        std::process::exit(1);
+    }
+
+    if !regex::Regex::new(r"([0-9]{1,3}\.){3}[0-9]{1,3}").unwrap().is_match(&argumentIp) {
+        println!("Invalid IP address '{}'", argumentIp);
+        std::process::exit(1);
+    }
+
+    let ip = makeu8Vec(argumentIp);
     let netmask = arguments.mask;
 
     let mask: Vec<u8>;
