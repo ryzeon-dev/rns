@@ -12,8 +12,9 @@ use std::thread::sleep;
 use regex;
 use libarp;
 use std::str::FromStr;
+use sysutil;
 
-const VERSION: &str = "0.8.4";
+const VERSION: &str = "0.9.0";
 const STD_PORTS: [u16; 17] = [
     20, 21, 22, 53, 80, 143, 443, 445, 465, 1080, 1194, 3306, 5432, 7329, 9050, 9100, 51820
 ];
@@ -413,96 +414,86 @@ fn parseFile(filePath: String, tcp: bool) -> HashMap<String, (String, String)> {
 }
 
 fn main() {
-    let mut args = std::env::args().collect::<Vec::<String>>();
+    let args = std::env::args().collect::<Vec::<String>>();
 
     if args.len() == 1 {
         println!("Not enough arguments");
         std::process::exit(1);
     }
 
-    if args.contains(&"-h".to_string()) || args.contains(&"--help".to_string()) {
+    let arguments = args::Args::parse(&mut args[1..].to_vec());
+    if arguments.help {
         println!("rns: Rust Network Scan version {VERSION}");
-        println!("usage: rns [-s|--single] IPv4 [NETMASK] [OPTIONS]");
-        println!("\noptions:");
-        println!("    -e  | --explain                  Explain standard ports");
-        println!("    -h  | --help                     Show this message and exit");
-        println!("    -ht | --host-timeout TIMEOUT     Time to wait for host to answer (milliseconds), default 1000");
-        println!("    -l  | --local [PROTOCOL]         Display open ports on local machine, can be restricted to a certain protocol");
-        println!("    -m  | --mac                      Find MAC address if possible");
-        println!("    -p  | --ports PORTS              List of ports to scam, comma separated");
-        println!("    -pr | --ports-range PORTS        Range of ports to scan, comma separated");
-        println!("    -pt | --port-timeout TIMEOUT     Port scanning timeout (milliseconds), default 100");
-        println!("    -s  | --single                   Only check the specified address");
-        println!("    -std                             Only check standard ports");
-        println!("    -v  | --version                  Display version and exit");
-        println!("\nnotes:");
-        println!("    NetMask can be specified in both IP address form");
-        println!("    (e.g. 255.255.255.0) and CIDR form (e.g. 24)");
-        println!("\nexamples:");
-        println!("- scan the entire network");
-        println!("    $ rns 192.168.1.0 255.255.255.0 -std");
-        println!("    $ rns 192.168.1.0 24 -std");
-        println!("- scan all ports on single address");
-        println!("    $ rns -s 192.168.1.10");
-        println!("- scan only ports in the range 1000-9999 on the entire network");
-        println!("    $ rns 192.168.1.0 24 -pr 1000,9999");
-        println!("- scan only certain ports on single address");
-        println!("    $ rns -s 192.168.1.10 -p 80,8080,8088,8888,8808");
+        println!("usage: rns (scan | list | help | version | explain)");
+        println!("    rns scan [single] IP [mask NETMASK] ports [std | RANGE | LIST | all] [scan-mac] [host-timeout TIMEOUT] [port-timeout TIMEOUT]");
+        println!("    rns list [ports [tcp | udp] | addresses]");
+        println!("    rns help");
+        println!("    rns version");
+        println!("    rns explain");
+        println!("notes: ");
+        println!("- NETMASK can be specified both in ip address (255.255.255.0) and CIDR (24) form");
+        println!("- ports RANGE must be '-' separated (e.g. 0-1000)");
+        println!("- ports LIST must be ',' separated (e.g. 80,88,8080,8088,8808,8888)");
+        println!("examples:");
+        println!("- scan all ip addresses in 192.168.1.0/24 subnet, checking for standard ports and mac addresses");
+        println!("    $ rns scan 192.168.1.0 mask 255.255.255.0 ports std scan-mac");
+        println!("- scan a single ip addresses, checking for ports in range 0-1000");
+        println!("    $ rns scan single 192.168.1.1 ports 0-1000");
         println!("- display locally open tcp ports");
-        println!("    $ rns -l tcp");
-        println!("- displat all locally open ports");
-        println!("    $ rns --local");
-
+        println!("    $ rns list ports tcp");
+        println!("- display all local ip addresses");
+        println!("    $ rns list addresses");
         std::process::exit(0);
     }
 
-    if args.contains(&"-v".to_string()) || args.contains(&"--version".to_string()) {
+    if arguments.version {
         println!("version: {VERSION}");
         std::process::exit(0);
     }
-    
-    if args.contains(&"-e".to_string()) || args.contains(&"--explain".to_string()) {
+
+    if arguments.explain {
         explainPorts();
         std::process::exit(0);
     }
-    
-    let arguments = args::Args::parse(&mut args);
 
-    if arguments.local {
-        let tcpMap = parseFile("/proc/net/tcp".to_string(), true);
-        let udpMap = parseFile("/proc/net/udp".to_string(), false);
+    if arguments.list {
+        if arguments.listPorts {
 
-        if arguments.localProtocol == String::from("tcp") {
-            println!("{:15} : {:5} PROCESS", "ADDRESS", "PORT");
+            let tcpMap = parseFile("/proc/net/tcp".to_string(), true);
+            let udpMap = parseFile("/proc/net/udp".to_string(), false);
 
-            println!("{:15} : {:5}", "ADDRESS", "PORT");
-            for (inode, (address, port)) in tcpMap {
-                println!("{:15} : {:5}", address, port);
+            if arguments.listProtocol == String::from("tcp") {
+                println!("{:15} : {:5}", "ADDRESS", "PORT");
+                for (inode, (address, port)) in tcpMap {
+                    println!("{:15} : {:5}", address, port);
+                }
+
+            } else if arguments.listProtocol == String::from("udp") {
+                println!("{:15} : {:5}", "ADDRESS", "PORT");
+                for (inode, (address, port)) in udpMap {
+                    println!("{:15} : {:5}", address, port);
+                }
+
+            } else if arguments.listProtocol.is_empty() {
+                println!("{:15} : {:5}", "ADDRESS", "PORT");
+                println!("TCP");
+
+                for (inode, (address, port)) in tcpMap {
+                    println!("{:15} : {:5}", address, port);
+                }
+
+                println!("UDP");
+                for (inode, (address, port)) in udpMap {
+                    println!("{:15} : {:5}", address, port);
+                }
             }
 
-        } else if arguments.localProtocol == String::from("udp") {
-            println!("{:15} : {:5}", "ADDRESS", "PORT");
-            for (inode, (address, port)) in udpMap {
-                println!("{:15} : {:5}", address, port);
+        } else if arguments.listAddresses {
+            let addresses = sysutil::getIPv4();
+
+            for address in addresses {
+                println!("{}/{} -> {}", address.address, address.cidr,  address.interface);
             }
-
-
-        } else if arguments.localProtocol.is_empty() {
-            println!("{:15} : {:5}", "ADDRESS", "PORT");
-            println!("TCP");
-
-            for (inode, (address, port)) in tcpMap {
-                println!("{:15} : {:5}", address, port);
-            }
-
-            println!("UDP");
-            for (inode, (address, port)) in udpMap {
-                println!("{:15} : {:5}", address, port);
-            }
-
-        } else {
-            println!("Bad argument '{}' for --local option", {arguments.localProtocol});
-            std::process::exit(1);
         }
 
         std::process::exit(0);
@@ -513,11 +504,12 @@ fn main() {
         let report = Arc::new(Mutex::new(Vec::<String>::new()));
 
         println!("[*] Checking single IP {}", arguments.ip);
+        if arguments.ports.len() != 65536 {
 
-        if !arguments.allPorts {
             println!("[*] Checking ports: {}\n", {
                 if &arguments.ports.len() < &20 {
                     format!("{:?}", &arguments.ports)
+
                 } else {
                     format!("[{} -> {}]", &arguments.ports.first().unwrap(), &arguments.ports.last().unwrap())
                 }
@@ -537,18 +529,7 @@ fn main() {
         std::process::exit(0);
     }
 
-    let argumentIp = arguments.ip;
-    if argumentIp.starts_with("-") {
-        println!("Invalid option: '{}'", &argumentIp);
-        std::process::exit(1);
-    }
-
-    if !regex::Regex::new(r"([0-9]{1,3}\.){3}[0-9]{1,3}").unwrap().is_match(&argumentIp) {
-        println!("Invalid IP address '{}'", argumentIp);
-        std::process::exit(1);
-    }
-
-    let ip = makeu8Vec(argumentIp);
+    let ip = makeu8Vec(arguments.ip);
     let netmask = arguments.mask;
 
     let mask: Vec<u8>;
@@ -574,7 +555,7 @@ fn main() {
     println!("[*] Base IP: {}", ipToString(&baseIP));
     println!("[*] Broadcast IP: {}\n", ipToString(&endIP));
 
-    if !arguments.allPorts {
+    if arguments.ports.len() != 65536 {
         println!("[*] Checking ports: {}\n", {
             if &arguments.ports.len() < &20 {
                 format!("{:?}", &arguments.ports)

@@ -1,247 +1,342 @@
-use crate::STD_PORTS;
+use regex::Regex;
+
+const STD_PORTS: [u16; 17] = [
+    20, 21, 22, 53, 80, 143, 443, 445, 465, 1080, 1194, 3306, 5432, 7329, 9050, 9100, 51820
+];
 
 #[derive(Debug)]
 pub struct Args {
+    pub scan: bool,
+
     pub ip: String,
     pub single: bool,
     pub mask: String,
     pub ports: Vec<u16>,
-    pub local: bool,
-    pub localProtocol: String,
-    pub allPorts: bool,
     pub scanMac: bool,
     pub hostTimeout: u64,
-    pub portTimeout: u64
+    pub portTimeout: u64,
+
+    pub help: bool,
+    pub explain: bool,
+
+    pub list: bool,
+    pub listPorts: bool,
+    pub listProtocol: String,
+    pub listAddresses: bool,
+    pub listAddressType: String,
+
+    pub version: bool
 }
 
 impl Args {
     pub fn new() -> Args {
         Args {
+            scan: false,
             ip: String::new(),
             single: false,
             mask: String::new(),
             ports: Vec::<u16>::new(),
-            local: false,
-            localProtocol: String::new(),
-            allPorts: false,
-            scanMac: false,
+            scanMac: true,
             hostTimeout: 1000,
-            portTimeout: 100
+            portTimeout: 100,
+
+            help: false,
+            explain: false,
+
+            list: false,
+            listPorts: false,
+            listProtocol: String::new(),
+            listAddresses: false,
+            listAddressType: String::new(),
+
+            version: false
         }
     }
 
     pub fn parse(args: &mut Vec<String>) -> Args {
         let mut arguments = Args::new();
+        let mut index = 0_usize;
 
-        if args.contains(&"-std".to_string()) {
-            arguments.ports = STD_PORTS.clone().to_vec();
+        let command = match args.get(index) {
+            None => {
+                println!("Too few arguments");
+                std::process::exit(1);
+            },
+            Some(cmd) => cmd.to_owned()
+        };
+        index += 1;
 
-        } else if args.contains(&"--ports".to_string()) || args.contains(&"-p".to_string()) {
-            let flagIndex = {
-                let mut index: usize = 0;
+        if command == "scan".to_string() {
+            arguments.scan = true;
 
-                for arg in &mut *args {
-                    if *arg == "--ports".to_string() || *arg == "-p".to_string() {
-                        break
-                    }
-
-                    index += 1;
-                }
-
-                index
+            let following = match args.get(index) {
+                None => {
+                    println!("Expected ip address or `single` command word after `scan`");
+                    std::process::exit(1);
+                },
+                Some(str) => str.to_owned()
             };
+            let ip;
 
-            args.remove(flagIndex);
-            arguments.ports = {
-                let stringPorts = args.remove(flagIndex);
-                let mut uPorts = Vec::<u16>::new();
+            if following == "single".to_string() {
+                arguments.single = true;
+                index += 1;
 
-                for port in stringPorts.split(",") {
-
-                    match port.parse::<u16>() {
-                        Err(_) => {
-                            println!("Port '{}' is not a valid port", port);
-                        },
-                        Ok(p) => {
-                            uPorts.push(p);
-                        }
-                    }
-                }
-                uPorts
-            };
-
-        } else if args.contains(&"-pr".to_string()) || args.contains(&"--ports-range".to_string()) {
-            let flagIndex = {
-                let mut index: usize = 0;
-
-                for arg in &mut *args {
-                    if *arg == "-pr".to_string() || *arg == "--ports-range".to_string() {
-                        break
-                    }
-
-                    index += 1;
-                }
-                index
-            };
-
-            args.remove(flagIndex);
-            arguments.ports = {
-                let stringPorts = args.remove(flagIndex);
-                let splitted = stringPorts.split(",").collect::<Vec<&str>>();
-
-                let startPort = match splitted.get(0).unwrap().parse::<u16>() {
-                    Err(_) => {
-                        println!("Port '{}' is not a valid port", splitted[0]);
-                        std::process::exit(0);
+                ip = match args.get(index) {
+                    None =>  {
+                        println!("Expected ip address after `single`");
+                        std::process::exit(1);
                     },
-                    Ok(p) => p
+                    Some(address) => address.to_owned()
                 };
 
-                let endPort = match splitted.get(1).unwrap().parse::<u16>() {
-                    Err(_) => {
-                        println!("Port '{}' is not a valid port", splitted[1]);
-                        std::process::exit(0);
-                    },
-                    Ok(p) => p
-                };
-
-                let mut range = Vec::<u16>::new();
-                for port in startPort..endPort {
-                    range.push(port);
-                }
-                range
-            };
-        } else if args.contains(&"-l".to_string()) || args.contains(&"--local".to_string()) {
-            arguments.local = true;
-
-            let flagIndex = {
-                let mut index: usize = 0;
-
-                for arg in &mut *args {
-                    if *arg == "-l".to_string() || *arg == "--local".to_string() {
-                        break
-                    }
-
-                    index += 1;
-                }
-                index
-            };
-
-            if flagIndex == args.len() - 1 {
-
-            } else if ["tcp", "udp"].contains(&args[flagIndex + 1].as_str()) {
-                let protocol = args[flagIndex + 1].as_str();
-
-                if protocol == "tcp" {
-                    arguments.localProtocol = "tcp".to_string();
-
-                } else if protocol == "udp" {
-                    arguments.localProtocol = "udp".to_string();
-
-                }
             } else {
-                println!("Bad argument '{}' for option `--local`. Allowed values are: tcp, udp", &args[flagIndex + 1]);
+                ip = following;
+            }
+
+            if Regex::new(r"([0-9]{1,3}\.){3}[0-9]{1,3}").unwrap().is_match(&ip) {
+                arguments.ip = ip;
+
+            } else {
+                println!("Bad ip address '{}'", ip);
+                std::process::exit(1);
+            }
+            index += 1;
+
+            let followingCommand = match args.get(index) {
+                None => {
+                    println!("Expecting `mask` or `ports` after ip address");
+                    std::process::exit(1);
+                },
+                Some(str) => str.to_owned()
+            };
+
+            if followingCommand == "mask" {
+                index += 1;
+                if arguments.single {
+                    println!("Not expecting netmask when scanning single address");
+                    std::process::exit(1);
+                }
+
+                let mask = match args.get(index) {
+                    None => {
+                        println!("Expecting network mask after `mask`");
+                        std::process::exit(1);
+                    },
+                    Some(str) => str.to_owned()
+                };
+                index += 1;
+
+                if Regex::new(r"([0-9]{1,3}\.){3}[0-9]{1,3}").unwrap().is_match(&mask) ||
+                    Regex::new(r"[0-9]{1,2}").unwrap().is_match(&mask) {
+                    arguments.mask = mask;
+
+                } else {
+                    println!("Bad netmask '{}'", mask);
+                    std::process::exit(1);
+                }
+
+            } else if followingCommand != "mask" && !arguments.single {
+                println!("Expecting `mask` after ip address");
                 std::process::exit(1);
             }
 
-        } else {
-            arguments.allPorts = true;
-            arguments.ports = {
-                let mut temp = Vec::<u16>::new();
+            let portsCommand = match args.get(index) {
+                None => {
+                    println!("Expecting `ports` keyword");
+                    std::process::exit(1);
+                },
+                Some(str) => str.to_owned()
+            };
+            index += 1;
 
-                for port in 0..65536 {
-                    temp.push(port as u16);
-                }
-
-                temp
+            if portsCommand != "ports".to_string() {
+                println!("Expecting `ports` keyword");
+                std::process::exit(1);
             }
-        }
 
-        if args.contains(&"-ht".to_string()) || args.contains(&"--host-timeout".to_string()) {
-            let flagIndex = {
-                let mut index: usize = 0_usize;
+            let following = match args.get(index) {
+                None => {
+                    println!("Expecting port specification after `ports`");
+                    std::process::exit(1);
+                },
+                Some(str) => str.to_owned()
+            };
+            index += 1;
 
-                for arg in &mut *args {
-                    if *arg == "-ht".to_string() || *arg == "--host-timeout".to_string() {
-                        break
+            if following == "all".to_string() {
+                arguments.ports = {
+                    let mut ports = Vec::<u16>::new();
+
+                    for port in 0..65536 {
+                        ports.push(port as u16);
                     }
-                    index += 1;
+
+                    ports
+                };
+            } else if following == "std".to_string() {
+                arguments.ports = Vec::from(STD_PORTS);
+
+            } else if following.contains(",") {
+                arguments.ports = {
+                    let mut ports = Vec::<u16>::new();
+
+                    for port in following.split(",") {
+                        match port.parse::<u16>() {
+                            Err(_) => {
+                                println!("Invalid port '{}'", port);
+                                std::process::exit(1);
+                            },
+                            Ok(p) => {
+                                ports.push(p)
+                            }
+                        }
+                    }
+
+                    ports
                 }
 
-                index
+            } else if following.contains("-") {
+                arguments.ports = {
+                    let mut ports = Vec::<u16>::new();
+
+                    let splitted = following.split("-").collect::<Vec<&str>>();
+                    let startPort = match splitted.get(0).unwrap().parse::<u16>() {
+                        Err(_) => {
+                            println!("Invalid port range start");
+                            std::process::exit(1);
+                        },
+                        Ok(p) => p
+                    };
+
+                    let endPort = match splitted.get(1) {
+                        None => {
+                            println!("Missing port range end");
+                            std::process::exit(1);
+                        },
+
+                        Some(p) => {
+                            match p.parse::<u16>() {
+                                Err(_) => {
+                                    println!("Invalid port range end");
+                                    std::process::exit(1);
+                                },
+                                Ok(port) => port
+                            }
+                        }
+                    };
+
+                    for port in startPort..endPort {
+                        ports.push(port);
+                    }
+
+                    ports
+                }
+            } else {
+                println!("Invalid port(s)");
+                std::process::exit(1);
+            }
+
+            while index < args.len() {
+                let command = args.get(index).unwrap().to_owned();
+                index += 1;
+
+                if command == "host-timeout" {
+                    let following = match args.get(index) {
+                        None => {
+                            println!("Expecting timeout after `host-timeout`");
+                            std::process::exit(1);
+                        },
+                        Some(str) => str.to_owned()
+                    };
+
+                    arguments.hostTimeout = match following.parse::<u64>() {
+                        Err(_) => {
+                            println!("Invalid value '{}' for `host-timeout`", following);
+                            std::process::exit(1);
+                        },
+                        Ok(timeout) => timeout
+                    };
+
+                } else if command == "port-timeout" {
+                    let following = match args.get(index) {
+                        None => {
+                            println!("Expecting timeout after `port-timeout`");
+                            std::process::exit(1);
+                        },
+                        Some(str) => str.to_owned()
+                    };
+
+                    arguments.portTimeout = match following.parse::<u64>() {
+                        Err(_) => {
+                            println!("Invalid value '{}' for `port-timeout`", following);
+                            std::process::exit(1);
+                        },
+                        Ok(timeout) => timeout
+                    };
+
+                } else if command == "scan-mac" {
+                    arguments.scanMac = true;
+
+                } else {
+                    println!("Unexpected command '{}'", command);
+                }
+            }
+
+        } else if command == "list".to_string() {
+            arguments.list = true;
+
+            let following = match args.get(index) {
+                None => {
+                    println!("Expecting either `ports` or `addresses` after `list`");
+                    std::process::exit(1);
+                },
+                Some(str) => str.to_owned()
             };
 
-            args.remove(flagIndex);
-            arguments.hostTimeout = args.remove(flagIndex).parse::<u64>().unwrap();
+            index += 1;
 
-        } else {
-            arguments.hostTimeout = 1000_u64;
-        }
+            if following == "ports".to_string() {
+                arguments.listPorts = true;
 
-        if args.contains(&"-pt".to_string()) || args.contains(&"--port-timeout".to_string()) {
-            let flagIndex = {
-                let mut index: usize = 0_usize;
+                if index < args.len() {
+                    let protocol = args.get(index).unwrap().to_owned();
 
-                for arg in &mut *args {
-                    if *arg == "-pt".to_string() || *arg == "--port-timeout".to_string() {
-                        break
+                    if ! ["tcp", "udp"].contains(&protocol.as_str()) {
+                        println!("Valid open ports protocols are: tcp, udp");
+                        std::process::exit(1);
+
+                    } else {
+                        arguments.listProtocol = protocol;
+                        index += 1;
                     }
-                    index += 1;
                 }
 
-                index
-            };
+            } else if following == "addresses".to_string() {
+                arguments.listAddresses = true;
 
-            args.remove(flagIndex);
-            arguments.portTimeout = args.remove(flagIndex).parse::<u64>().unwrap();
+            } else {
+                println!("Expecting either `ports` or `addresses` after `list`");
+                std::process::exit(1);
+            }
 
-        } else {
-            arguments.portTimeout = 100_u64;
+        } else if command == "help".to_string() {
+            arguments.help = true;
+
+        } else if command == "explain".to_string() {
+            arguments.explain = true;
+
+        } else if command == "version".to_string() {
+            arguments.version = true;
+
+        } else{
+            println!("Bad command '{}'. Run `rns help` for usage", command);
+            std::process::exit(1);
         }
 
-        if args.contains(&"-m".to_string()) || args.contains(&"--mac".to_string()) {
-
-            let flagIndex = {
-                let mut index: usize = 0_usize;
-                for arg in &mut *args {
-                    if *arg == "-m".to_string() || *arg == "--mac".to_string() {
-                        break
-                    }
-                    index += 1;
-                }
-                index
-            };
-
-            args.remove(flagIndex);
-            arguments.scanMac = true;
-
-        } else {
-            arguments.scanMac = false;
-        }
-
-        if args.contains(&"-s".to_string()) || args.contains(&"--single".to_string()) {
-            let flagIndex = {
-                let mut index = 0_usize;
-
-                for arg in &mut *args {
-                    if *arg == "-s".to_string() || *arg == "--single".to_string() {
-                        break;
-                    }
-                    index += 1;
-                }
-                index
-            };
-
-            args.remove(flagIndex);
-            arguments.single = true;
-        }
-
-        if args.get(1) != None {
-            arguments.ip = args.get(1).unwrap().to_string();
-        }
-
-        if args.get(2) != None {
-            arguments.mask = args.get(2).unwrap().to_string();
+        if index < args.len() {
+            println!("Unexpected arguments '{}'", args[index..].join(" "));
+            std::process::exit(1);
         }
 
         arguments
