@@ -257,6 +257,7 @@ impl Args {
                         },
                         Ok(timeout) => timeout
                     };
+                    index += 1;
 
                 } else if command == "port-timeout" {
                     let following = match args.get(index) {
@@ -274,12 +275,14 @@ impl Args {
                         },
                         Ok(timeout) => timeout
                     };
+                    index += 1;
 
                 } else if command == "scan-mac" {
                     arguments.scanMac = true;
 
                 } else {
                     println!("Unexpected command '{}'", command);
+                    std::process::exit(1);
                 }
             }
 

@@ -14,7 +14,7 @@ use libarp;
 use std::str::FromStr;
 use sysutil;
 
-const VERSION: &str = "0.9.0";
+const VERSION: &str = "0.9.1";
 const STD_PORTS: [u16; 17] = [
     20, 21, 22, 53, 80, 143, 443, 445, 465, 1080, 1194, 3306, 5432, 7329, 9050, 9100, 51820
 ];
