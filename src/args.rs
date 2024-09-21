@@ -1,8 +1,5 @@
+use self::super::ports;
 use regex::Regex;
-
-const STD_PORTS: [u16; 17] = [
-    20, 21, 22, 53, 80, 143, 443, 445, 465, 1080, 1194, 3306, 5432, 7329, 9050, 9100, 51820
-];
 
 #[derive(Debug)]
 pub struct Args {
@@ -36,7 +33,7 @@ impl Args {
             single: false,
             mask: String::new(),
             ports: Vec::<u16>::new(),
-            scanMac: true,
+            scanMac: false,
             hostTimeout: 1000,
             portTimeout: 100,
 
@@ -175,7 +172,10 @@ impl Args {
                     ports
                 };
             } else if following == "std".to_string() {
-                arguments.ports = Vec::from(STD_PORTS);
+                arguments.ports = Vec::from(ports::STD_PORTS);
+
+            } else if following == "nmap".to_string() {
+                arguments.ports = Vec::from(ports::NMAP_PORTS);
 
             } else if following.contains(",") {
                 arguments.ports = {

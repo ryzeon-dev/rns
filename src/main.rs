@@ -1,6 +1,7 @@
 #![allow(non_snake_case, unused_must_use, dead_code, unused_variables)]
 
 mod threadpool;
+pub mod ports;
 pub mod args;
 
 use std::collections::HashMap;
@@ -14,7 +15,7 @@ use libarp;
 use std::str::FromStr;
 use sysutil;
 
-const VERSION: &str = "0.9.0";
+const VERSION: &str = "0.9.1";
 const STD_PORTS: [u16; 17] = [
     20, 21, 22, 53, 80, 143, 443, 445, 465, 1080, 1194, 3306, 5432, 7329, 9050, 9100, 51820
 ];
@@ -425,7 +426,7 @@ fn main() {
     if arguments.help {
         println!("rns: Rust Network Scan version {VERSION}");
         println!("usage: rns (scan | list | help | version | explain)");
-        println!("    rns scan [single] IP [mask NETMASK] ports [std | RANGE | LIST | all] [scan-mac] [host-timeout TIMEOUT] [port-timeout TIMEOUT]");
+        println!("    rns scan [single] IP [mask NETMASK] ports [std | nmap | RANGE | LIST | all] [scan-mac] [host-timeout TIMEOUT] [port-timeout TIMEOUT]");
         println!("    rns list [ports [tcp | udp] | addresses]");
         println!("    rns help");
         println!("    rns version");
@@ -434,6 +435,8 @@ fn main() {
         println!("- NETMASK can be specified both in ip address (255.255.255.0) and CIDR (24) form");
         println!("- ports RANGE must be '-' separated (e.g. 0-1000)");
         println!("- ports LIST must be ',' separated (e.g. 80,88,8080,8088,8808,8888)");
+        println!("- `std` ports can be viewed running `rns explain`");
+        println!("- `nmap` ports are the standard 1000 ports used by nmap");
         println!("examples:");
         println!("- scan all ip addresses in 192.168.1.0/24 subnet, checking for standard ports and mac addresses");
         println!("    $ rns scan 192.168.1.0 mask 255.255.255.0 ports std scan-mac");

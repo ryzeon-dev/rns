@@ -47,51 +47,67 @@ sudo make install
 
 
 ## Usage
-- give any IP address from the network you want to scan, and the relative netmask (note that mask can be specified in both IP address and CIDR form)
-
+### Scanning
+#### Network Scanning
+- you must provide an IP address, a network mask (ip address or CIDR form) and some ports to scan
 ```
-rns 192.168.1.25 255.255.255.0
-rns 192.168.1.25 24
-```
-- to only check the standard ports add `-std` flag
-```
-rns 192.168.1.25 255.255.255.0 -std
+rns scan 192.168.1.0 mask 24 ports std
 ```
 
-- to only check certain ports use the `-p` or `--ports` flag followed by the list of ports, comma separated
+- it is possible to set the timeout (in milliseconds) for both host scanning (checking if the host is up) and port scanning (checking if the ports is open), using the `host-timeout` and `ports-timeout` verbs
 ```
-rns 192.168.1.25 24 -p 80,8080,8088,8808,8888
-```
-
-- to check a port range use the `-pr` or `--ports-range` flag, followed by the starting port and the ending port (which is excluded), comma separated
-```
-rns 192.168.1.25 24 -pr 1000,10000
+rns scan 192.168.1.0 mask 255.255.255.0 ports std host-timeout 1500 ports-timeout 500
 ```
 
-- to find the MAC address of the responsive IPs, pass the `-m` or `--mac` flag
-  - if ran as root, arp messages will be sent, otherwise cached macs will be used
+- to scan certain ports, write them comma separated after the `ports` verb
 ```
-rns 192.168.1.25 24 -std --mac
-```
-
-- to check locally open ports use the `-l` or `--local` flag
-  - "tcp" or "udp" can be added as arguments, if missing both tcp and udp open ports will be shown
-```
-rns --local
-rns -l tcp
+rns scan 192.168.1.0 mask 24 ports 80,8080,8088,8808,8888 
 ```
 
-- to check a single address run (any of the previous flags can be also used with a single address):
+- to scan a port range (e.g. from 0 to 999), write the starting port and the ending port (plus one) separated by `-`
+  - remember that the ending port is a limit, and therefore excluded 
 ```
-rns -s 192.168.1.10
+rns scan 192.168.1.0 mask 24 ports 0-1000
 ```
-- to get an explanation for the standard ports run :
+
+- to scan the standard ports (you can get a description for them running `rns explain`) use `std` as argument for `ports` verb 
 ```
-rns --explain 
-rns -e 
+rns scan 192.168.1.0 mask 24 ports std
 ```
-- to get help run 
+
+- to scan the nmap's standard 1000 ports, use `nmap` as argument for `ports` verb
 ```
-rns --help
-rns -h
+rns scan 192.168.1.0 mask 24 ports nmap
 ```
+#### Single address scanning
+- to scan only one IP address, use the `single` verb before the IP address
+  - note that network mask is not required (and must not be provided)
+```
+rns scan single 192.168.1.16 ports std
+```
+
+- all the verbs shown above are valid for single-address scanning 
+
+### Listing
+#### Locally open ports
+- to list the ports openend on local machine, use the `list ports` verb, and both TCP and UDP open ports will be shown
+```
+rns list ports
+```
+
+- to only view TCP or UDP, pass `tcp` or `udp` after `ports` verb
+```
+rns list ports tcp
+```
+
+#### Local IP Addresses
+- to list local machine's IP addresses use `list addresses` verb
+```
+rns list addresses
+```
+
+### Help 
+- run `rns help` to get help
+
+### Version
+- version can be checked running `rns version`
