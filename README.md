@@ -9,7 +9,8 @@
 - Network scanning tool written in rust 
 
 ## Installation
-- requires the following packages to be installed:
+- precompiled binaries are available for amd64 and arm64 architectures, inside the `bin` folder, otherwise you have to compile from source
+- package pre-requisites for local compilation:
 ```
 git
 cargo
@@ -20,6 +21,7 @@ make
 ```
 git clone https://github.com/ryzeon-dev/rns && cd rns && make && sudo make install
 ```
+
 ### Step by step
 - clone the repo
 ```
