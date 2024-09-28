@@ -87,6 +87,16 @@ rns scan 192.168.1.0 mask 24 ports 0-1000
 rns scan 192.168.1.0 mask 24 ports std
 ```
 
+- to scan both open ports and mac addresses add `scan-mac` verb at the end
+```
+rns scan 192.168.1.0 mask 24 ports std scan-mac
+```
+
+- only scan for mac addresses use `mac-only` verb instead of `ports`
+```
+rns scan 192.168.1.0 mask 24 mac-only
+```
+
 - to scan the nmap's standard 1000 ports, use `nmap` as argument for `ports` verb
 ```
 rns scan 192.168.1.0 mask 24 ports nmap
