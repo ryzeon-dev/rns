@@ -17,6 +17,7 @@ cargo
 make
 ```
 
+## Compile and install
 ### One-liner
 ```
 git clone https://github.com/ryzeon-dev/rns && cd rns && make && sudo make install
@@ -40,13 +41,22 @@ cd rns
 make
 ```
 
-
 - install (requires root)
 
 ```
 sudo make install
 ```
 
+## Install precompiled
+### `amd64`
+```
+sudo make install-amd64
+```
+
+### `arm64`
+```
+sudo make install-arm64
+```
 
 ## Usage
 ### Scanning
@@ -81,6 +91,13 @@ rns scan 192.168.1.0 mask 24 ports std
 ```
 rns scan 192.168.1.0 mask 24 ports nmap
 ```
+
+- to export the scan into a Json file, use the `json` verb
+  - by doing so, all the stdout-communications are suppressed
+```
+rns scan 192.168.1.0 mask 24 ports std json > report.json
+```
+
 #### Single address scanning
 - to scan only one IP address, use the `single` verb before the IP address
   - note that network mask is not required (and must not be provided)

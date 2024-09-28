@@ -22,6 +22,8 @@ pub struct Args {
     pub listAddresses: bool,
     pub listAddressType: String,
 
+    pub json: bool,
+
     pub version: bool
 }
 
@@ -46,6 +48,8 @@ impl Args {
             listAddresses: false,
             listAddressType: String::new(),
 
+            json: false,
+
             version: false
         }
     }
@@ -56,7 +60,7 @@ impl Args {
 
         let command = match args.get(index) {
             None => {
-                println!("Too few arguments");
+                eprintln!("Too few arguments");
                 std::process::exit(1);
             },
             Some(cmd) => cmd.to_owned()
@@ -68,7 +72,7 @@ impl Args {
 
             let following = match args.get(index) {
                 None => {
-                    println!("Expected ip address or `single` command word after `scan`");
+                    eprintln!("Expected ip address or `single` command word after `scan`");
                     std::process::exit(1);
                 },
                 Some(str) => str.to_owned()
@@ -81,7 +85,7 @@ impl Args {
 
                 ip = match args.get(index) {
                     None =>  {
-                        println!("Expected ip address after `single`");
+                        eprintln!("Expected ip address after `single`");
                         std::process::exit(1);
                     },
                     Some(address) => address.to_owned()
@@ -95,14 +99,14 @@ impl Args {
                 arguments.ip = ip;
 
             } else {
-                println!("Bad ip address '{}'", ip);
+                eprintln!("Bad ip address '{}'", ip);
                 std::process::exit(1);
             }
             index += 1;
 
             let followingCommand = match args.get(index) {
                 None => {
-                    println!("Expecting `mask` or `ports` after ip address");
+                    eprintln!("Expecting `mask` or `ports` after ip address");
                     std::process::exit(1);
                 },
                 Some(str) => str.to_owned()
@@ -111,13 +115,13 @@ impl Args {
             if followingCommand == "mask" {
                 index += 1;
                 if arguments.single {
-                    println!("Not expecting netmask when scanning single address");
+                    eprintln!("Not expecting netmask when scanning single address");
                     std::process::exit(1);
                 }
 
                 let mask = match args.get(index) {
                     None => {
-                        println!("Expecting network mask after `mask`");
+                        eprintln!("Expecting network mask after `mask`");
                         std::process::exit(1);
                     },
                     Some(str) => str.to_owned()
@@ -129,18 +133,18 @@ impl Args {
                     arguments.mask = mask;
 
                 } else {
-                    println!("Bad netmask '{}'", mask);
+                    eprintln!("Bad netmask '{}'", mask);
                     std::process::exit(1);
                 }
 
             } else if followingCommand != "mask" && !arguments.single {
-                println!("Expecting `mask` after ip address");
+                eprintln!("Expecting `mask` after ip address");
                 std::process::exit(1);
             }
 
             let portsCommand = match args.get(index) {
                 None => {
-                    println!("Expecting `ports` keyword");
+                    eprintln!("Expecting `ports` keyword");
                     std::process::exit(1);
                 },
                 Some(str) => str.to_owned()
@@ -148,13 +152,13 @@ impl Args {
             index += 1;
 
             if portsCommand != "ports".to_string() {
-                println!("Expecting `ports` keyword");
+                eprintln!("Expecting `ports` keyword");
                 std::process::exit(1);
             }
 
             let following = match args.get(index) {
                 None => {
-                    println!("Expecting port specification after `ports`");
+                    eprintln!("Expecting port specification after `ports`");
                     std::process::exit(1);
                 },
                 Some(str) => str.to_owned()
@@ -184,7 +188,7 @@ impl Args {
                     for port in following.split(",") {
                         match port.parse::<u16>() {
                             Err(_) => {
-                                println!("Invalid port '{}'", port);
+                                eprintln!("Invalid port '{}'", port);
                                 std::process::exit(1);
                             },
                             Ok(p) => {
@@ -203,7 +207,7 @@ impl Args {
                     let splitted = following.split("-").collect::<Vec<&str>>();
                     let startPort = match splitted.get(0).unwrap().parse::<u16>() {
                         Err(_) => {
-                            println!("Invalid port range start");
+                            eprintln!("Invalid port range start");
                             std::process::exit(1);
                         },
                         Ok(p) => p
@@ -211,14 +215,14 @@ impl Args {
 
                     let endPort = match splitted.get(1) {
                         None => {
-                            println!("Missing port range end");
+                            eprintln!("Missing port range end");
                             std::process::exit(1);
                         },
 
                         Some(p) => {
                             match p.parse::<u16>() {
                                 Err(_) => {
-                                    println!("Invalid port range end");
+                                    eprintln!("Invalid port range end");
                                     std::process::exit(1);
                                 },
                                 Ok(port) => port
@@ -233,7 +237,7 @@ impl Args {
                     ports
                 }
             } else {
-                println!("Invalid port(s)");
+                eprintln!("Invalid port(s)");
                 std::process::exit(1);
             }
 
@@ -244,7 +248,7 @@ impl Args {
                 if command == "host-timeout" {
                     let following = match args.get(index) {
                         None => {
-                            println!("Expecting timeout after `host-timeout`");
+                            eprintln!("Expecting timeout after `host-timeout`");
                             std::process::exit(1);
                         },
                         Some(str) => str.to_owned()
@@ -252,7 +256,7 @@ impl Args {
 
                     arguments.hostTimeout = match following.parse::<u64>() {
                         Err(_) => {
-                            println!("Invalid value '{}' for `host-timeout`", following);
+                            eprintln!("Invalid value '{}' for `host-timeout`", following);
                             std::process::exit(1);
                         },
                         Ok(timeout) => timeout
@@ -262,7 +266,7 @@ impl Args {
                 } else if command == "port-timeout" {
                     let following = match args.get(index) {
                         None => {
-                            println!("Expecting timeout after `port-timeout`");
+                            eprintln!("Expecting timeout after `port-timeout`");
                             std::process::exit(1);
                         },
                         Some(str) => str.to_owned()
@@ -270,7 +274,7 @@ impl Args {
 
                     arguments.portTimeout = match following.parse::<u64>() {
                         Err(_) => {
-                            println!("Invalid value '{}' for `port-timeout`", following);
+                            eprintln!("Invalid value '{}' for `port-timeout`", following);
                             std::process::exit(1);
                         },
                         Ok(timeout) => timeout
@@ -280,8 +284,11 @@ impl Args {
                 } else if command == "scan-mac" {
                     arguments.scanMac = true;
 
+                } else if command == "json"{
+                    arguments.json = true;
+
                 } else {
-                    println!("Unexpected command '{}'", command);
+                    eprintln!("Unexpected command '{}'", command);
                     std::process::exit(1);
                 }
             }
@@ -291,7 +298,7 @@ impl Args {
 
             let following = match args.get(index) {
                 None => {
-                    println!("Expecting either `ports` or `addresses` after `list`");
+                    eprintln!("Expecting either `ports` or `addresses` after `list`");
                     std::process::exit(1);
                 },
                 Some(str) => str.to_owned()
@@ -306,7 +313,7 @@ impl Args {
                     let protocol = args.get(index).unwrap().to_owned();
 
                     if ! ["tcp", "udp"].contains(&protocol.as_str()) {
-                        println!("Valid open ports protocols are: tcp, udp");
+                        eprintln!("Valid open ports protocols are: tcp, udp");
                         std::process::exit(1);
 
                     } else {
@@ -319,7 +326,7 @@ impl Args {
                 arguments.listAddresses = true;
 
             } else {
-                println!("Expecting either `ports` or `addresses` after `list`");
+                eprintln!("Expecting either `ports` or `addresses` after `list`");
                 std::process::exit(1);
             }
 
@@ -333,12 +340,12 @@ impl Args {
             arguments.version = true;
 
         } else{
-            println!("Bad command '{}'. Run `rns help` for usage", command);
+            eprintln!("Bad command '{}'. Run `rns help` for usage", command);
             std::process::exit(1);
         }
 
         if index < args.len() {
-            println!("Unexpected arguments '{}'", args[index..].join(" "));
+            eprintln!("Unexpected arguments '{}'", args[index..].join(" "));
             std::process::exit(1);
         }
 

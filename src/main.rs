@@ -14,11 +14,10 @@ use regex;
 use libarp;
 use std::str::FromStr;
 use sysutil;
+use rsjson;
+use rsjson::{Node, NodeContent};
 
-const VERSION: &str = "0.9.3";
-const STD_PORTS: [u16; 17] = [
-    20, 21, 22, 53, 80, 143, 443, 445, 465, 1080, 1194, 3306, 5432, 7329, 9050, 9100, 51820
-];
+const VERSION: &str = "0.9.4";
 
 fn explainPorts() {
     println!("Standard ports explanation:");
@@ -33,6 +32,7 @@ fn explainPorts() {
     println!("    1080   Socks proxy");
     println!("    1194   OpenVPN");
     println!("    3306   MySQL");
+    println!("    3389   Microsoft Windows Remote Desktop");
     println!("    5432   PostgreSQL");
     println!("    7329   Docker proxy");
     println!("    9050   TOR proxy");
@@ -108,7 +108,7 @@ fn ipToString(ip: &Vec<u8>) -> String {
     res.join(".").to_string()
 }
 
-fn check(ip: Vec<u8>, ports: Vec<u16>, threads: Arc<Mutex<usize>>, report: Arc<Mutex<Vec<String>>>, singleAddress: bool, hostTimeout: u64, portTimeout: u64, checkMac: bool) {
+fn check(ip: Vec<u8>, ports: Vec<u16>, threads: Arc<Mutex<usize>>, report: Arc<Mutex<Vec<String>>>, jsonReport: Arc<Mutex<rsjson::Json>>, singleAddress: bool, hostTimeout: u64, portTimeout: u64, checkMac: bool, silent: bool) {
     *threads.lock().unwrap() += 1;
 
     let formattedIP = {[ip[0], ip[1], ip[2], ip[3]]};
@@ -122,7 +122,10 @@ fn check(ip: Vec<u8>, ports: Vec<u16>, threads: Arc<Mutex<usize>>, report: Arc<M
             match why.kind() {
                 std::io::ErrorKind::ConnectionRefused => {},
                 _ => {
-                    println!("[x] {} non responsive", ipToString(&ip));
+                    if !silent {
+                        println!("[x] {} non responsive", ipToString(&ip));
+                    }
+
                     *threads.lock().unwrap() -= 1;
                     return 
                 }
@@ -131,7 +134,9 @@ fn check(ip: Vec<u8>, ports: Vec<u16>, threads: Arc<Mutex<usize>>, report: Arc<M
 
         Ok(_sock) => {}
     }
-    println!("[*] {} found responsive", ipToString(&ip));
+    if !silent{
+        println!("[*] {} found responsive", ipToString(&ip));
+    }
 
     let open = Arc::new(Mutex::new(Vec::<u16>::new()));
 
@@ -159,7 +164,10 @@ fn check(ip: Vec<u8>, ports: Vec<u16>, threads: Arc<Mutex<usize>>, report: Arc<M
                         Ok(sock) => {
                             openClone.lock().unwrap().push(*port as u16);
                             sock.shutdown(Shutdown::Both);
-                            println!("[*] Open port found: {}", port);
+
+                            if !silent {
+                                println!("[*] Open port found: {}", port);
+                            }
                         },
 
                         _ => {}
@@ -185,7 +193,9 @@ fn check(ip: Vec<u8>, ports: Vec<u16>, threads: Arc<Mutex<usize>>, report: Arc<M
                 Ok(sock) => {
                     open.lock().unwrap().push(port as u16);
                     sock.shutdown(Shutdown::Both);
-                    println!("[*] {} Open port found: {}", ipToString(&ip), port);
+                    if !silent {
+                        println!("[*] {} Open port found: {}", ipToString(&ip), port);
+                    }
                 },
                 _ => {}
             }
@@ -204,6 +214,33 @@ fn check(ip: Vec<u8>, ports: Vec<u16>, threads: Arc<Mutex<usize>>, report: Arc<M
 
     } else {
         mac = String::new();
+    }
+
+    let mut binding = jsonReport.lock().unwrap();
+    let jsonNode = binding.get(&stringedIp);
+
+    if jsonNode != None {
+        for port in open.lock().unwrap().to_vec() {
+            jsonNode.unwrap().toList().unwrap().push(rsjson::NodeContent::Int(port as usize));
+        }
+
+    } else {
+        let mut content = rsjson::Json::new();
+        content.addNode(Node::new("mac", NodeContent::String(mac.clone())));
+        content.addNode(Node::new("ports", NodeContent::List({
+            let mut ports = Vec::<NodeContent>::new();
+            for port in open.lock().unwrap().to_vec() {
+                ports.push(NodeContent::Int(port as usize));
+            }
+            ports
+        })));
+
+        let node = rsjson::Node::new(
+            &stringedIp,
+            NodeContent::Json(content)
+        );
+
+        binding.addNode(node);
     }
 
     report.lock().unwrap().push(format!(
@@ -418,7 +455,7 @@ fn main() {
     let args = std::env::args().collect::<Vec::<String>>();
 
     if args.len() == 1 {
-        println!("Not enough arguments");
+        eprintln!("Not enough arguments");
         std::process::exit(1);
     }
 
@@ -426,7 +463,7 @@ fn main() {
     if arguments.help {
         println!("rns: Rust Network Scan version {VERSION}");
         println!("usage: rns (scan | list | help | version | explain)");
-        println!("    rns scan [single] IP [mask NETMASK] ports [std | nmap | RANGE | LIST | all] [scan-mac] [host-timeout TIMEOUT] [port-timeout TIMEOUT]");
+        println!("    rns scan [single] IP [mask NETMASK] ports [std | nmap | RANGE | LIST | all] [scan-mac] [host-timeout TIMEOUT] [port-timeout TIMEOUT] [json]");
         println!("    rns list [ports [tcp | udp] | addresses]");
         println!("    rns help");
         println!("    rns version");
@@ -505,28 +542,40 @@ fn main() {
     if arguments.single {
         let threads = Arc::new(Mutex::new(0_usize));
         let report = Arc::new(Mutex::new(Vec::<String>::new()));
+        let jsonReport = Arc::new(Mutex::new(rsjson::Json::new()));
 
-        println!("[*] Checking single IP {}", arguments.ip);
-        if arguments.ports.len() != 65536 {
+        if !arguments.json {
+            println!("[*] Checking single IP {}", arguments.ip);
 
-            println!("[*] Checking ports: {}\n", {
-                if &arguments.ports.len() < &20 {
-                    format!("{:?}", &arguments.ports)
+            if arguments.ports.len() != 65536 {
+                println!("[*] Checking ports: {}\n", {
+                    if &arguments.ports.len() < &20 {
+                        format!("{:?}", &arguments.ports)
 
-                } else {
-                    format!("[{} -> {}]", &arguments.ports.first().unwrap(), &arguments.ports.last().unwrap())
-                }
-            });
+                    } else {
+                        format!("[{} -> {}]", &arguments.ports.first().unwrap(), &arguments.ports.last().unwrap())
+                    }
+                });
 
-        } else {
-            println!("[*] Checking all ports (0-65535)\n");
+            } else {
+                println!("[*] Checking all ports (0-65535)\n");
+            }
         }
 
-        check(makeu8Vec(arguments.ip.to_owned()), arguments.ports, threads, Arc::clone(&report), true, arguments.hostTimeout, arguments.portTimeout, arguments.scanMac);
-        println!("\n[*] Final report:\n");
+        check(
+            makeu8Vec(arguments.ip.to_owned()), arguments.ports, threads, Arc::clone(&report),
+            Arc::clone(&jsonReport), true, arguments.hostTimeout,
+            arguments.portTimeout, arguments.scanMac, arguments.json
+        );
 
-        for line in &*report.lock().unwrap() {
-            println!("{}", line);
+        if arguments.json {
+            println!("{}", jsonReport.lock().unwrap().toString());
+        } else  {
+            println!("\n[*] Final report:\n");
+
+            for line in &*report.lock().unwrap() {
+                println!("{}", line);
+            }
         }
 
         std::process::exit(0);
@@ -543,7 +592,7 @@ fn main() {
         mask = maskFromCidr(netmask.parse::<u8>().unwrap());
 
     } else {
-        println!("Netmask must be in ip address form or in cidr form");
+        eprintln!("Netmask must be in ip address form or in cidr form");
         std::process::exit(1);
     }
 
@@ -552,41 +601,46 @@ fn main() {
     let baseIP = makeBaseIP(&ip, &mask);
     let endIP = makeEndIP(&ip, &inverseMask);
 
-    println!("[*] Netmask: {}", ipToString(&mask));
-    println!("[*] Hostmask: {}", ipToString(&inverseMask));
+    if !arguments.json {
+        println!("[*] Netmask: {}", ipToString(&mask));
+        println!("[*] Hostmask: {}", ipToString(&inverseMask));
 
-    println!("[*] Base IP: {}", ipToString(&baseIP));
-    println!("[*] Broadcast IP: {}\n", ipToString(&endIP));
+        println!("[*] Base IP: {}", ipToString(&baseIP));
+        println!("[*] Broadcast IP: {}\n", ipToString(&endIP));
 
-    if arguments.ports.len() != 65536 {
-        println!("[*] Checking ports: {}\n", {
-            if &arguments.ports.len() < &20 {
-                format!("{:?}", &arguments.ports)
+        if arguments.ports.len() != 65536 {
+            println!("[*] Checking ports: {}\n", {
+                if &arguments.ports.len() < &20 {
+                    format!("{:?}", &arguments.ports)
 
-            } else {
-                format!("[{} -> {}]", &arguments.ports.first().unwrap(), &arguments.ports.last().unwrap())
-            }
-        });
+                } else {
+                    format!("[{} -> {}]", &arguments.ports.first().unwrap(), &arguments.ports.last().unwrap())
+                }
+            });
 
-    } else {
-        println!("[*] Checking all ports (0-65535)\n");
+        } else {
+            println!("[*] Checking all ports (0-65535)\n");
+        }
     }
-    
+
     let mut current = baseIP.clone();
     let threads = Arc::new(Mutex::new(0_usize));
     let report = Arc::new(Mutex::new(Vec::<String>::new()));
+    let jsonReport = Arc::new(Mutex::new(rsjson::Json::new()));
 
     while current != endIP {
         let ipClone = current.clone();
         let mutexClone = Arc::clone(&threads);
 
         let reportClone = Arc::clone(&report);
+        let jsonReportClone = Arc::clone(&jsonReport);
         let portsClone = arguments.ports.clone();
 
         thread::spawn(move ||{
             check(
-                ipClone, portsClone, mutexClone, reportClone,
-                false, arguments.hostTimeout, arguments.portTimeout, arguments.scanMac
+                ipClone, portsClone, mutexClone, reportClone, jsonReportClone,
+                false, arguments.hostTimeout, arguments.portTimeout, arguments.scanMac,
+                arguments.json
             );
         });
 
@@ -597,15 +651,21 @@ fn main() {
         sleep(Duration::from_millis(100));
     }
 
-    println!("\n[*] Final report:\n");
+    if arguments.json {
+        println!("{}", jsonReport.lock().unwrap().toString());
 
-    println!("[>] Netmask: {}", ipToString(&mask));
-    println!("[>] Hostmask: {}", ipToString(&inverseMask));
+    } else {
 
-    println!("[>] Base IP: {}", ipToString(&baseIP));
-    println!("[>] Broadcast IP: {}\n", ipToString(&endIP));
+        println!("\n[*] Final report:\n");
 
-    for line in &*report.lock().unwrap() {
-        println!("{}", line);
+        println!("[>] Netmask: {}", ipToString(&mask));
+        println!("[>] Hostmask: {}", ipToString(&inverseMask));
+
+        println!("[>] Base IP: {}", ipToString(&baseIP));
+        println!("[>] Broadcast IP: {}\n", ipToString(&endIP));
+
+        for line in &*report.lock().unwrap() {
+            println!("{}", line);
+        }
     }
 }

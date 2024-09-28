@@ -233,18 +233,19 @@ checksum = "7a66a03ae7c801facd77a29370b4faec201768915ac14a721ba36f20bc9c209b"
 
 [[package]]
 name = "rns"
-version = "0.9.2"
+version = "0.9.4"
 dependencies = [
  "arp-toolkit",
  "regex",
+ "rsjson",
  "sysutil",
 ]
 
 [[package]]
 name = "rsjson"
-version = "0.5.0"
+version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4f794d6aba4593cedc1e6b9cbbe13c43ce527005d1f21d6907c2c41d44d820b2"
+checksum = "95a73fdc106c2d63ec6ed88a760ecf4b669ad43b9954dffdc40061dbde0e7e36"
 
 [[package]]
 name = "serde"
