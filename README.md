@@ -125,6 +125,12 @@ rns list ports tcp
 rns list addresses
 ```
 
+#### Local Network Interfaces
+- to list local machine's network interfaces use `list interfaces` verb
+```
+rns list interfaces
+```
+
 ### Help 
 - run `rns help` to get help
 

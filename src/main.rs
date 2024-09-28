@@ -16,6 +16,7 @@ use std::str::FromStr;
 use sysutil;
 use rsjson;
 use rsjson::{Node, NodeContent};
+use sysutil::InterfaceType;
 
 const VERSION: &str = "0.9.4";
 
@@ -108,7 +109,7 @@ fn ipToString(ip: &Vec<u8>) -> String {
     res.join(".").to_string()
 }
 
-fn check(ip: Vec<u8>, ports: Vec<u16>, threads: Arc<Mutex<usize>>, report: Arc<Mutex<Vec<String>>>, jsonReport: Arc<Mutex<rsjson::Json>>, singleAddress: bool, hostTimeout: u64, portTimeout: u64, checkMac: bool, silent: bool) {
+fn check(ip: Vec<u8>, ports: Vec<u16>, threads: Arc<Mutex<usize>>, report: Arc<Mutex<Vec<String>>>, jsonReport: Arc<Mutex<rsjson::Json>>, singleAddress: bool, hostTimeout: u64, portTimeout: u64, checkMac: bool, silent: bool, macOnly: bool) {
     *threads.lock().unwrap() += 1;
 
     let formattedIP = {[ip[0], ip[1], ip[2], ip[3]]};
@@ -134,78 +135,83 @@ fn check(ip: Vec<u8>, ports: Vec<u16>, threads: Arc<Mutex<usize>>, report: Arc<M
 
         Ok(_sock) => {}
     }
-    if !silent{
+
+    if !silent {
         println!("[*] {} found responsive", ipToString(&ip));
     }
 
     let open = Arc::new(Mutex::new(Vec::<u16>::new()));
 
-    if singleAddress {
-        let threadCount = thread::available_parallelism().unwrap().get();
+    if !macOnly {
+        if singleAddress {
+            let threadCount = thread::available_parallelism().unwrap().get();
 
-        let portThreadPool = threadpool::ThreadPool::new(threadCount);
-        let runningThreads = Arc::new(Mutex::new(0));
+            let portThreadPool = threadpool::ThreadPool::new(threadCount);
+            let runningThreads = Arc::new(Mutex::new(0));
 
-        let mut startPortIndex = 0;
-        let portsChunk = if &threadCount > &ports.len() { 1 } else { &ports.len() / threadCount };
+            let mut startPortIndex = 0;
+            let portsChunk = if &threadCount > &ports.len() { 1 } else { &ports.len() / threadCount };
 
-        while startPortIndex < (&ports.len()).to_owned() {
-            let runningThreadsClone = runningThreads.clone();
-            let openClone = open.clone();
-            let portsClone = ports.clone();
+            while startPortIndex < (&ports.len()).to_owned() {
+                let runningThreadsClone = runningThreads.clone();
+                let openClone = open.clone();
+                let portsClone = ports.clone();
 
-            portThreadPool.exec(move || {
-                *runningThreadsClone.lock().unwrap() += 1;
+                portThreadPool.exec(move || {
+                    *runningThreadsClone.lock().unwrap() += 1;
 
-                let range = if startPortIndex + portsChunk < portsClone.len() { portsClone[startPortIndex..startPortIndex + portsChunk].to_vec() } else { portsClone[startPortIndex..].to_vec() };
-                for port in &range {
-                    match TcpStream::connect_timeout(&SocketAddr::from((formattedIP, *port)), Duration::from_millis(portTimeout)) {
+                    let range = if startPortIndex + portsChunk < portsClone.len() { portsClone[startPortIndex..startPortIndex + portsChunk].to_vec() } else { portsClone[startPortIndex..].to_vec() };
+                    for port in &range {
+                        match TcpStream::connect_timeout(&SocketAddr::from((formattedIP, *port)), Duration::from_millis(portTimeout)) {
 
-                        Ok(sock) => {
-                            openClone.lock().unwrap().push(*port as u16);
-                            sock.shutdown(Shutdown::Both);
+                            Ok(sock) => {
+                                openClone.lock().unwrap().push(*port as u16);
+                                sock.shutdown(Shutdown::Both);
 
-                            if !silent {
-                                println!("[*] Open port found: {}", port);
-                            }
-                        },
+                                if !silent {
+                                    println!("[*] Open port found: {}", port);
+                                }
+                            },
 
-                        _ => {}
+                            _ => {}
+                        }
                     }
-                }
 
-                *runningThreadsClone.lock().unwrap() -= 1;
-            });
-            startPortIndex += portsChunk;
-        }
+                    *runningThreadsClone.lock().unwrap() -= 1;
+                });
+                startPortIndex += portsChunk;
+            }
 
-        sleep(Duration::from_millis(100));
-
-        while *runningThreads.lock().unwrap() > 0 {
             sleep(Duration::from_millis(100));
-        }
+
+            while *runningThreads.lock().unwrap() > 0 {
+                sleep(Duration::from_millis(100));
+            }
 
 
-    } else {
-        for port in ports {
+        } else {
+            for port in ports {
 
-            match TcpStream::connect_timeout(&SocketAddr::from((formattedIP, port)), Duration::from_millis(portTimeout)) {
-                Ok(sock) => {
-                    open.lock().unwrap().push(port as u16);
-                    sock.shutdown(Shutdown::Both);
-                    if !silent {
-                        println!("[*] {} Open port found: {}", ipToString(&ip), port);
-                    }
-                },
-                _ => {}
+                match TcpStream::connect_timeout(&SocketAddr::from((formattedIP, port)), Duration::from_millis(portTimeout)) {
+                    Ok(sock) => {
+                        open.lock().unwrap().push(port as u16);
+                        sock.shutdown(Shutdown::Both);
+                        if !silent {
+                            println!("[*] {} Open port found: {}", ipToString(&ip), port);
+                        }
+                    },
+                    _ => {}
+                }
             }
         }
     }
 
+
+
     let stringedIp = ipToString(&ip);
     let mut mac;
 
-    if checkMac {
+    if checkMac || macOnly {
         mac = arpScanIp(&stringedIp);
 
         if mac.is_empty() {
@@ -243,11 +249,21 @@ fn check(ip: Vec<u8>, ports: Vec<u16>, threads: Arc<Mutex<usize>>, report: Arc<M
         binding.addNode(node);
     }
 
-    report.lock().unwrap().push(format!(
-        "[>] Found {}{} open ports: {:?}", stringedIp,
-        if mac.is_empty() { String::new() } else { format!(" ({})", mac) },
-        open.lock().unwrap().to_vec())
-    );
+    if macOnly {
+        report.lock().unwrap().push(format!(
+                "[>] Found {}: mac {}", stringedIp,
+                if mac.is_empty() { String::from("not found") } else { format!("{}", mac) },
+            )
+        );
+
+    } else {
+        report.lock().unwrap().push(format!(
+                "[>] Found {}{} open ports: {:?}", stringedIp,
+                if mac.is_empty() { String::new() } else { format!(" ({})", mac) },
+                open.lock().unwrap().to_vec()
+            )
+        );
+    }
 
     *threads.lock().unwrap() -= 1;
 }
@@ -463,8 +479,8 @@ fn main() {
     if arguments.help {
         println!("rns: Rust Network Scan version {VERSION}");
         println!("usage: rns (scan | list | help | version | explain)");
-        println!("    rns scan [single] IP [mask NETMASK] ports [std | nmap | RANGE | LIST | all] [scan-mac] [host-timeout TIMEOUT] [port-timeout TIMEOUT] [json]");
-        println!("    rns list [ports [tcp | udp] | addresses]");
+        println!("    rns scan [single] IP [mask NETMASK] (ports (std | nmap | RANGE | LIST | all) | mac-only) [scan-mac] [host-timeout TIMEOUT] [port-timeout TIMEOUT] [json]");
+        println!("    rns list [ports [tcp | udp] | addresses | interfaces]");
         println!("    rns help");
         println!("    rns version");
         println!("    rns explain");
@@ -534,6 +550,15 @@ fn main() {
             for address in addresses {
                 println!("{}/{} -> {}", address.address, address.cidr,  address.interface);
             }
+        } else if arguments.listInterfaces {
+            let interfaces = sysutil::networkInterfaces();
+
+            for interface in interfaces {
+                println!("{} -> {} ({} interface)", interface.name, interface.macAddress, match interface.interfaceType {
+                    InterfaceType::Virtual => "virtual",
+                    InterfaceType::Physical => "physical",
+                });
+            }
         }
 
         std::process::exit(0);
@@ -544,7 +569,7 @@ fn main() {
         let report = Arc::new(Mutex::new(Vec::<String>::new()));
         let jsonReport = Arc::new(Mutex::new(rsjson::Json::new()));
 
-        if !arguments.json {
+        if !arguments.json || arguments.macOnly {
             println!("[*] Checking single IP {}", arguments.ip);
 
             if arguments.ports.len() != 65536 {
@@ -565,11 +590,12 @@ fn main() {
         check(
             makeu8Vec(arguments.ip.to_owned()), arguments.ports, threads, Arc::clone(&report),
             Arc::clone(&jsonReport), true, arguments.hostTimeout,
-            arguments.portTimeout, arguments.scanMac, arguments.json
+            arguments.portTimeout, arguments.scanMac, arguments.json, arguments.macOnly
         );
 
         if arguments.json {
             println!("{}", jsonReport.lock().unwrap().toString());
+
         } else  {
             println!("\n[*] Final report:\n");
 
@@ -608,18 +634,20 @@ fn main() {
         println!("[*] Base IP: {}", ipToString(&baseIP));
         println!("[*] Broadcast IP: {}\n", ipToString(&endIP));
 
-        if arguments.ports.len() != 65536 {
-            println!("[*] Checking ports: {}\n", {
-                if &arguments.ports.len() < &20 {
-                    format!("{:?}", &arguments.ports)
+        if !arguments.macOnly {
+            if arguments.ports.len() != 65536 {
+                println!("[*] Checking ports: {}\n", {
+                    if &arguments.ports.len() < &20 {
+                        format!("{:?}", &arguments.ports)
 
-                } else {
-                    format!("[{} -> {}]", &arguments.ports.first().unwrap(), &arguments.ports.last().unwrap())
-                }
-            });
+                    } else {
+                        format!("[{} -> {}]", &arguments.ports.first().unwrap(), &arguments.ports.last().unwrap())
+                    }
+                });
 
-        } else {
-            println!("[*] Checking all ports (0-65535)\n");
+            } else {
+                println!("[*] Checking all ports (0-65535)\n");
+            }
         }
     }
 
@@ -640,7 +668,7 @@ fn main() {
             check(
                 ipClone, portsClone, mutexClone, reportClone, jsonReportClone,
                 false, arguments.hostTimeout, arguments.portTimeout, arguments.scanMac,
-                arguments.json
+                arguments.json, arguments.macOnly
             );
         });
 

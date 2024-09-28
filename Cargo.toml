@@ -8,5 +8,5 @@ edition = "2021"
 [dependencies]
 regex = "1.10.5"
 arp-toolkit = {version = "0.3.2", features = ["sync"]}
-sysutil = "0.5.2"
+sysutil = "0.5.4"
 rsjson = "0.5.1"

@@ -280,9 +280,9 @@ dependencies = [
 
 [[package]]
 name = "sysutil"
-version = "0.5.2"
+version = "0.5.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c1d7ecb42f17d71b7ced35d1ea39c5560363acb02f60175ee212adefa7663ff2"
+checksum = "a1431fefd7e89eba48a89040fa3930cfd07ac539a09b99e4eeb296b249cc76ec"
 dependencies = [
  "rsjson",
 ]

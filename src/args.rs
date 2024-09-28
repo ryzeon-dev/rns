@@ -12,6 +12,7 @@ pub struct Args {
     pub scanMac: bool,
     pub hostTimeout: u64,
     pub portTimeout: u64,
+    pub macOnly: bool,
 
     pub help: bool,
     pub explain: bool,
@@ -20,7 +21,8 @@ pub struct Args {
     pub listPorts: bool,
     pub listProtocol: String,
     pub listAddresses: bool,
-    pub listAddressType: String,
+    pub listInterfaces: bool,
+
 
     pub json: bool,
 
@@ -38,6 +40,7 @@ impl Args {
             scanMac: false,
             hostTimeout: 1000,
             portTimeout: 100,
+            macOnly: false,
 
             help: false,
             explain: false,
@@ -46,7 +49,7 @@ impl Args {
             listPorts: false,
             listProtocol: String::new(),
             listAddresses: false,
-            listAddressType: String::new(),
+            listInterfaces: false,
 
             json: false,
 
@@ -142,104 +145,110 @@ impl Args {
                 std::process::exit(1);
             }
 
-            let portsCommand = match args.get(index) {
+            let followingCommand = match args.get(index) {
                 None => {
-                    eprintln!("Expecting `ports` keyword");
+                    eprintln!("Expecting `ports` or `mac-only` after ip address/mask");
                     std::process::exit(1);
                 },
                 Some(str) => str.to_owned()
             };
             index += 1;
 
-            if portsCommand != "ports".to_string() {
-                eprintln!("Expecting `ports` keyword");
-                std::process::exit(1);
-            }
-
-            let following = match args.get(index) {
-                None => {
-                    eprintln!("Expecting port specification after `ports`");
-                    std::process::exit(1);
-                },
-                Some(str) => str.to_owned()
-            };
-            index += 1;
-
-            if following == "all".to_string() {
-                arguments.ports = {
-                    let mut ports = Vec::<u16>::new();
-
-                    for port in 0..65536 {
-                        ports.push(port as u16);
-                    }
-
-                    ports
+            if followingCommand == "ports".to_string() {
+                let following = match args.get(index) {
+                    None => {
+                        eprintln!("Expecting port specification after `ports`");
+                        std::process::exit(1);
+                    },
+                    Some(str) => str.to_owned()
                 };
-            } else if following == "std".to_string() {
-                arguments.ports = Vec::from(ports::STD_PORTS);
+                index += 1;
 
-            } else if following == "nmap".to_string() {
-                arguments.ports = Vec::from(ports::NMAP_PORTS);
+                if following == "all".to_string() {
+                    arguments.ports = {
+                        let mut ports = Vec::<u16>::new();
 
-            } else if following.contains(",") {
-                arguments.ports = {
-                    let mut ports = Vec::<u16>::new();
-
-                    for port in following.split(",") {
-                        match port.parse::<u16>() {
-                            Err(_) => {
-                                eprintln!("Invalid port '{}'", port);
-                                std::process::exit(1);
-                            },
-                            Ok(p) => {
-                                ports.push(p)
-                            }
+                        for port in 0..65536 {
+                            ports.push(port as u16);
                         }
-                    }
 
-                    ports
-                }
-
-            } else if following.contains("-") {
-                arguments.ports = {
-                    let mut ports = Vec::<u16>::new();
-
-                    let splitted = following.split("-").collect::<Vec<&str>>();
-                    let startPort = match splitted.get(0).unwrap().parse::<u16>() {
-                        Err(_) => {
-                            eprintln!("Invalid port range start");
-                            std::process::exit(1);
-                        },
-                        Ok(p) => p
+                        ports
                     };
+                } else if following == "std".to_string() {
+                    arguments.ports = Vec::from(ports::STD_PORTS);
 
-                    let endPort = match splitted.get(1) {
-                        None => {
-                            eprintln!("Missing port range end");
-                            std::process::exit(1);
-                        },
+                } else if following == "nmap".to_string() {
+                    arguments.ports = Vec::from(ports::NMAP_PORTS);
 
-                        Some(p) => {
-                            match p.parse::<u16>() {
+                } else if following.contains(",") {
+                    arguments.ports = {
+                        let mut ports = Vec::<u16>::new();
+
+                        for port in following.split(",") {
+                            match port.parse::<u16>() {
                                 Err(_) => {
-                                    eprintln!("Invalid port range end");
+                                    eprintln!("Invalid port '{}'", port);
                                     std::process::exit(1);
                                 },
-                                Ok(port) => port
+                                Ok(p) => {
+                                    ports.push(p)
+                                }
                             }
                         }
-                    };
 
-                    for port in startPort..endPort {
-                        ports.push(port);
+                        ports
                     }
 
-                    ports
+                } else if following.contains("-") {
+                    arguments.ports = {
+                        let mut ports = Vec::<u16>::new();
+
+                        let splitted = following.split("-").collect::<Vec<&str>>();
+                        let startPort = match splitted.get(0).unwrap().parse::<u16>() {
+                            Err(_) => {
+                                eprintln!("Invalid port range start");
+                                std::process::exit(1);
+                            },
+                            Ok(p) => p
+                        };
+
+                        let endPort = match splitted.get(1) {
+                            None => {
+                                eprintln!("Missing port range end");
+                                std::process::exit(1);
+                            },
+
+                            Some(p) => {
+                                match p.parse::<u16>() {
+                                    Err(_) => {
+                                        eprintln!("Invalid port range end");
+                                        std::process::exit(1);
+                                    },
+                                    Ok(port) => port
+                                }
+                            }
+                        };
+
+                        for port in startPort..endPort {
+                            ports.push(port);
+                        }
+
+                        ports
+                    }
+
+                } else {
+                    eprintln!("Invalid port(s)");
+                    std::process::exit(1);
                 }
+
+            } else if followingCommand == "mac-only" {
+                arguments.macOnly = true;
+
             } else {
-                eprintln!("Invalid port(s)");
+                eprintln!("Expecting `ports` or `mac-only` after ip address/mask, found `{}`", followingCommand);
                 std::process::exit(1);
             }
+
 
             while index < args.len() {
                 let command = args.get(index).unwrap().to_owned();
@@ -324,6 +333,10 @@ impl Args {
 
             } else if following == "addresses".to_string() {
                 arguments.listAddresses = true;
+
+            } else if following == "interfaces".to_string() {
+                arguments.listInterfaces = true;
+
 
             } else {
                 eprintln!("Expecting either `ports` or `addresses` after `list`");
