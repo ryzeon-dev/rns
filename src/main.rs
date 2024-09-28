@@ -18,7 +18,7 @@ use rsjson;
 use rsjson::{Node, NodeContent};
 use sysutil::InterfaceType;
 
-const VERSION: &str = "0.9.4";
+const VERSION: &str = "0.9.5";
 
 fn explainPorts() {
     println!("Standard ports explanation:");
