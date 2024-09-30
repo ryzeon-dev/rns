@@ -60,6 +60,11 @@ sudo make install-arm64
 
 ## Usage
 ### Scanning
+- `scan` verb can be called by its initial too
+```
+rns s 192.168.1.0 mask 24 ports all
+```
+
 #### Network Scanning
 - you must provide an IP address, a network mask (ip address or CIDR form) and some ports to scan
 ```
@@ -118,6 +123,10 @@ rns scan single 192.168.1.16 ports std
 - all the verbs shown above are valid for single-address scanning 
 
 ### Listing
+- `list` verb can be called by its initial too
+```
+rns l interfaces
+```
 #### Locally open ports
 - to list the ports openend on local machine, use the `list ports` verb, and both TCP and UDP open ports will be shown
 ```
@@ -145,4 +154,4 @@ rns list interfaces
 - run `rns help` to get help
 
 ### Version
-- version can be checked running `rns version`
+- version can be checked running `rns version` or `rns v`

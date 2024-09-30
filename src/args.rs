@@ -70,7 +70,7 @@ impl Args {
         };
         index += 1;
 
-        if command == "scan".to_string() {
+        if command == "scan".to_string() || command == "s".to_string() {
             arguments.scan = true;
 
             let following = match args.get(index) {
@@ -302,7 +302,7 @@ impl Args {
                 }
             }
 
-        } else if command == "list".to_string() {
+        } else if command == "list".to_string() || command == "l".to_string() {
             arguments.list = true;
 
             let following = match args.get(index) {
@@ -339,17 +339,17 @@ impl Args {
 
 
             } else {
-                eprintln!("Expecting either `ports` or `addresses` after `list`");
+                eprintln!("Expecting either `ports`, `addresses` or `interfaces` after `list`");
                 std::process::exit(1);
             }
 
-        } else if command == "help".to_string() {
+        } else if command == "help".to_string() || command == "h".to_string() {
             arguments.help = true;
 
-        } else if command == "explain".to_string() {
+        } else if command == "explain".to_string() || command == "e".to_string() {
             arguments.explain = true;
 
-        } else if command == "version".to_string() {
+        } else if command == "version".to_string() || command == "v".to_string() {
             arguments.version = true;
 
         } else{
