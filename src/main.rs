@@ -20,7 +20,7 @@ use rsjson::{Node, NodeContent};
 use ipv4Utils::{*};
 use utils::{*};
 
-const VERSION: &str = "0.9.5";
+const VERSION: &str = "0.9.6";
 
 fn explainPorts() {
     println!("Standard ports explanation:");
