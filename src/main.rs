@@ -20,7 +20,7 @@ use rsjson::{Node, NodeContent};
 use ipv4Utils::{*};
 use utils::{*};
 
-const VERSION: &str = "0.9.6";
+const VERSION: &str = "0.9.7";
 
 fn explainPorts() {
     println!("Standard ports explanation:");
@@ -45,9 +45,8 @@ fn explainPorts() {
 }
 
 fn check(
-    ip: Vec<u8>, ports: Vec<u16>, threads: Arc<Mutex<usize>>, report: Arc<Mutex<Vec<String>>>,
-    jsonReport: Arc<Mutex<rsjson::Json>>, singleAddress: bool, hostTimeout: u64, portTimeout: u64,
-    checkMac: bool, silent: bool, macOnly: bool) {
+    ip: Vec<u8>, threads: Arc<Mutex<usize>>, report: Arc<Mutex<Vec<String>>>,
+    jsonReport: Arc<Mutex<rsjson::Json>>, arguments: args::Args) {
     *threads.lock().unwrap() += 1;
 
     let formattedIP = {[ip[0], ip[1], ip[2], ip[3]]};
@@ -55,13 +54,13 @@ fn check(
 
     match TcpStream::connect_timeout(
         addr,
-        Duration::from_millis(hostTimeout)
+        Duration::from_millis(arguments.hostTimeout)
     ) {
         Err(why) => {
             match why.kind() {
                 std::io::ErrorKind::ConnectionRefused => {},
                 _ => {
-                    if !silent {
+                    if !arguments.quiet && !arguments.json {
                         println!("[x] {} non responsive", ipToString(&ip));
                     }
 
@@ -74,39 +73,39 @@ fn check(
         Ok(_sock) => {}
     }
 
-    if !silent {
+    if !arguments.json && !arguments.quiet {
         println!("[*] {} found responsive", ipToString(&ip));
     }
 
     let open = Arc::new(Mutex::new(Vec::<u16>::new()));
 
-    if !macOnly {
-        if singleAddress {
+    if !arguments.macOnly {
+        if !arguments.single {
             let threadCount = thread::available_parallelism().unwrap().get();
 
             let portThreadPool = threadpool::ThreadPool::new(threadCount);
             let runningThreads = Arc::new(Mutex::new(0));
 
             let mut startPortIndex = 0;
-            let portsChunk = if &threadCount > &ports.len() { 1 } else { &ports.len() / threadCount };
+            let portsChunk = if &threadCount > &arguments.ports.len() { 1 } else { &arguments.ports.len() / threadCount };
 
-            while startPortIndex < (&ports.len()).to_owned() {
+            while startPortIndex < (&arguments.ports.len()).to_owned() {
                 let runningThreadsClone = runningThreads.clone();
                 let openClone = open.clone();
-                let portsClone = ports.clone();
+                let portsClone = arguments.ports.clone();
 
                 portThreadPool.exec(move || {
                     *runningThreadsClone.lock().unwrap() += 1;
 
                     let range = if startPortIndex + portsChunk < portsClone.len() { portsClone[startPortIndex..startPortIndex + portsChunk].to_vec() } else { portsClone[startPortIndex..].to_vec() };
                     for port in &range {
-                        match TcpStream::connect_timeout(&SocketAddr::from((formattedIP, *port)), Duration::from_millis(portTimeout)) {
+                        match TcpStream::connect_timeout(&SocketAddr::from((formattedIP, *port)), Duration::from_millis(arguments.portTimeout)) {
 
                             Ok(sock) => {
                                 openClone.lock().unwrap().push(*port as u16);
                                 sock.shutdown(Shutdown::Both);
 
-                                if !silent {
+                                if !arguments.quiet && !arguments.json {
                                     println!("[*] Open port found: {}", port);
                                 }
                             },
@@ -128,13 +127,13 @@ fn check(
 
 
         } else {
-            for port in ports {
+            for port in arguments.ports {
 
-                match TcpStream::connect_timeout(&SocketAddr::from((formattedIP, port)), Duration::from_millis(portTimeout)) {
+                match TcpStream::connect_timeout(&SocketAddr::from((formattedIP, port)), Duration::from_millis(arguments.portTimeout)) {
                     Ok(sock) => {
                         open.lock().unwrap().push(port as u16);
                         sock.shutdown(Shutdown::Both);
-                        if !silent {
+                        if !arguments.quiet && !arguments.json {
                             println!("[*] {} Open port found: {}", ipToString(&ip), port);
                         }
                     },
@@ -149,7 +148,7 @@ fn check(
     let stringedIp = ipToString(&ip);
     let mut mac;
 
-    if checkMac || macOnly {
+    if arguments.scanMac || arguments.macOnly {
         mac = arpScanIp(&stringedIp);
 
         if mac.is_empty() {
@@ -171,11 +170,14 @@ fn check(
     } else {
         let mut content = rsjson::Json::new();
         content.addNode(Node::new("mac", NodeContent::String(mac.clone())));
+
         content.addNode(Node::new("ports", NodeContent::List({
             let mut ports = Vec::<NodeContent>::new();
+
             for port in open.lock().unwrap().to_vec() {
                 ports.push(NodeContent::Int(port as usize));
             }
+
             ports
         })));
 
@@ -187,7 +189,7 @@ fn check(
         binding.addNode(node);
     }
 
-    if macOnly {
+    if arguments.macOnly {
         report.lock().unwrap().push(format!(
                 "[>] Found {}: mac {}", stringedIp,
                 if mac.is_empty() { String::from("not found") } else { format!("{}", mac) },
@@ -301,11 +303,14 @@ fn listCommand(arguments: args::Args) {
 fn printHelp() {
     println!("rns: Rust Network Scan version {VERSION}");
     println!("usage: rns (scan | list | help | version | explain)");
-    println!("    rns scan [single] IP [mask NETMASK] (ports (std | nmap | RANGE | LIST | all) | mac-only) [scan-mac] [host-timeout TIMEOUT] [port-timeout TIMEOUT] [json]");
+    println!("    rns scan [single] IP [mask NETMASK] (ports (std | nmap | RANGE | LIST | all) | mac-only) [scan-mac] [host-timeout TIMEOUT] [port-timeout TIMEOUT] [FLAGS]");
     println!("    rns list [ports [tcp | udp] | addresses | interfaces]");
     println!("    rns help");
     println!("    rns version");
     println!("    rns explain");
+    println!("flags: ");
+    println!("    -j | --json     Output in json format");
+    println!("    -q | --quiet    Only output final reports");
     println!("notes: ");
     println!("- main verbs, such as `scan`, `list`, `version`, `explain` can be called by their initial too");
     println!("- NETMASK can be specified both in ip address (255.255.255.0) and CIDR (24) form");
@@ -332,7 +337,7 @@ fn main() {
         std::process::exit(1);
     }
 
-    let arguments = args::Args::parse(&mut args[1..].to_vec());
+    let arguments = args::Args::parse(args[1..].to_vec());
 
     if arguments.help {
         printHelp();
@@ -359,7 +364,7 @@ fn main() {
         let report = Arc::new(Mutex::new(Vec::<String>::new()));
         let jsonReport = Arc::new(Mutex::new(rsjson::Json::new()));
 
-        if !arguments.json || arguments.macOnly {
+        if !arguments.quiet && (!arguments.json || arguments.macOnly) {
             println!("[*] Checking single IP {}", arguments.ip);
 
             if arguments.ports.len() != 65536 {
@@ -378,16 +383,17 @@ fn main() {
         }
 
         check(
-            makeu8Vec(arguments.ip.to_owned()), arguments.ports, threads, Arc::clone(&report),
-            Arc::clone(&jsonReport), true, arguments.hostTimeout,
-            arguments.portTimeout, arguments.scanMac, arguments.json, arguments.macOnly
+            makeu8Vec(arguments.ip.to_owned()), threads, Arc::clone(&report),
+            Arc::clone(&jsonReport), arguments.clone()
         );
 
         if arguments.json {
             println!("{}", jsonReport.lock().unwrap().toString());
 
-        } else  {
-            println!("\n[*] Final report:\n");
+        } else {
+            if !arguments.single {
+                println!("\n[*] Final report:\n");
+            }
 
             for line in &*report.lock().unwrap() {
                 println!("{}", line);
@@ -397,8 +403,8 @@ fn main() {
         std::process::exit(0);
     }
 
-    let ip = makeu8Vec(arguments.ip);
-    let netmask = arguments.mask;
+    let ip = makeu8Vec((&arguments).ip.clone());
+    let netmask = &arguments.mask;
 
     let mask: Vec<u8>;
     if regex::Regex::new(r"([0-9]{1,3}\.){3}[0-9]{1,3}").unwrap().clone().is_match(netmask.as_str()) {
@@ -417,7 +423,7 @@ fn main() {
     let baseIP = makeBaseIP(&ip, &mask);
     let endIP = makeEndIP(&ip, &inverseMask);
 
-    if !arguments.json {
+    if !&arguments.quiet  && !&arguments.json {
         println!("[*] Netmask: {}", ipToString(&mask));
         println!("[*] Hostmask: {}", ipToString(&inverseMask));
 
@@ -425,7 +431,7 @@ fn main() {
         println!("[*] Broadcast IP: {}\n", ipToString(&endIP));
 
         if !arguments.macOnly {
-            if arguments.ports.len() != 65536 {
+            if (&arguments).ports.len() != 65536 {
                 println!("[*] Checking ports: {}\n", {
                     if &arguments.ports.len() < &20 {
                         format!("{:?}", &arguments.ports)
@@ -453,13 +459,11 @@ fn main() {
 
         let reportClone = Arc::clone(&report);
         let jsonReportClone = Arc::clone(&jsonReport);
-        let portsClone = arguments.ports.clone();
+        let argumentsClone = arguments.clone();
 
         thread::spawn(move ||{
             check(
-                ipClone, portsClone, mutexClone, reportClone, jsonReportClone,
-                false, arguments.hostTimeout, arguments.portTimeout, arguments.scanMac,
-                arguments.json, arguments.macOnly
+                ipClone, mutexClone, reportClone, jsonReportClone, argumentsClone
             );
         });
 
@@ -474,7 +478,9 @@ fn main() {
         println!("{}", jsonReport.lock().unwrap().toString());
 
     } else {
-        println!("\n[*] Final report:\n");
+        if !arguments.quiet {
+            println!("\n[*] Final report:\n");
+        }
 
         println!("[>] Netmask: {}", ipToString(&mask));
         println!("[>] Hostmask: {}", ipToString(&inverseMask));

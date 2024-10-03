@@ -1,7 +1,7 @@
 use self::super::ports;
 use regex::Regex;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Args {
     pub scan: bool,
 
@@ -23,7 +23,7 @@ pub struct Args {
     pub listAddresses: bool,
     pub listInterfaces: bool,
 
-
+    pub quiet: bool,
     pub json: bool,
 
     pub version: bool
@@ -51,15 +51,68 @@ impl Args {
             listAddresses: false,
             listInterfaces: false,
 
+            quiet: false,
             json: false,
 
             version: false
         }
     }
 
-    pub fn parse(args: &mut Vec<String>) -> Args {
+    fn checkFlags(argList: Vec<String>, arguments: &mut Args) -> Vec<String> {
+        let mut args = argList;
+        let mut index = 0_usize;
+
+        while index < args.len() {
+            let element = args.get(index).unwrap();
+
+
+            if element.starts_with("--") {
+                let flag = element.replace("--", "");
+
+                if flag == "quiet" {
+                    arguments.quiet = true;
+
+                } else if flag == "json" {
+                    arguments.json = true;
+
+                } else {
+                    eprintln!("Unrecognized flag `--{}`", flag);
+                    std::process::exit(1);
+                }
+
+                args.remove(index);
+
+            } else if element.starts_with("-") {
+                let letters = element.replace("-", "");
+
+                for letter in letters.chars() {
+                    if letter.to_string() == "q" {
+                        arguments.quiet = true;
+
+                    } else if letter.to_string() == "j" {
+                        arguments.json = true;
+
+                    } else {
+                        eprintln!("Unrecognized flag `-{}`", letter);
+                        std::process::exit(1);
+                    }
+                }
+
+                args.remove(index);
+            } else {
+                index += 1;
+            }
+
+        }
+
+        return args;
+    }
+
+    pub fn parse(argList: Vec<String>) -> Args {
         let mut arguments = Args::new();
         let mut index = 0_usize;
+
+        let args = &mut Args::checkFlags(argList, &mut arguments);
 
         let command = match args.get(index) {
             None => {
@@ -292,9 +345,6 @@ impl Args {
 
                 } else if command == "scan-mac" {
                     arguments.scanMac = true;
-
-                } else if command == "json"{
-                    arguments.json = true;
 
                 } else {
                     eprintln!("Unexpected command '{}'", command);

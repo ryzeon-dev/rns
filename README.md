@@ -2,6 +2,8 @@
     <img src="https://img.shields.io/badge/rust-16a085?style=for-the-badge&logo=rust" href="" style="margin: 10px" />
     <img src="https://img.shields.io/badge/tcp/ip-16a085?style=for-the-badge" href="" style="margin: 10px" />
     <img src="https://img.shields.io/badge/mac%20address-16a085?style=for-the-badge" href="" style="margin: 10px"/>
+    <img src="https://img.shields.io/badge/network%20interfaces-16a085?style=for-the-badge" href="" style="margin: 10px"/>
+    <img src="https://img.shields.io/badge/open%20ports-16a085?style=for-the-badge" href="" style="margin: 10px"/>
 </div>
 
 # rns - Rust Network Scan
@@ -107,10 +109,15 @@ rns scan 192.168.1.0 mask 24 mac-only
 rns scan 192.168.1.0 mask 24 ports nmap
 ```
 
-- to export the scan into a Json file, use the `json` verb
+- to export the scan into a Json file, use the `--json` or `-j` flag
   - by doing so, all the stdout-communications are suppressed
 ```
-rns scan 192.168.1.0 mask 24 ports std json > report.json
+rns scan 192.168.1.0 mask 24 ports std -j > report.json
+```
+
+- to have a quiet execution, use the `--quiet` or `-q` flag, this will output only the final report
+```
+rns scan 192.168.1.0 mask 24 ports std -q
 ```
 
 #### Single address scanning
@@ -127,6 +134,7 @@ rns scan single 192.168.1.16 ports std
 ```
 rns l interfaces
 ```
+
 #### Locally open ports
 - to list the ports openend on local machine, use the `list ports` verb, and both TCP and UDP open ports will be shown
 ```
