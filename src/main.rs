@@ -5,6 +5,7 @@ pub mod ports;
 pub mod args;
 mod ipv4Utils;
 mod utils;
+mod routeUtils;
 
 use std::net::{SocketAddr, TcpStream, Shutdown, Ipv4Addr};
 use std::time::Duration;
@@ -19,8 +20,9 @@ use rsjson;
 use rsjson::{Node, NodeContent};
 use ipv4Utils::{*};
 use utils::{*};
+use crate::routeUtils::getRoutes;
 
-const VERSION: &str = "0.9.7";
+const VERSION: &str = "0.9.8";
 
 fn explainPorts() {
     println!("Standard ports explanation:");
@@ -297,6 +299,12 @@ fn listCommand(arguments: args::Args) {
                 sysutil::InterfaceType::Physical => "physical",
             });
         }
+    } else if arguments.listRoutes {
+        let routes = getRoutes();
+
+        for route in routes {
+            println!("iface {} {} -> {} mask {} metric {}", route.0, route.1, route.2, route.4, route.3);
+        }
     }
 }
 
@@ -304,7 +312,7 @@ fn printHelp() {
     println!("rns: Rust Network Scan version {VERSION}");
     println!("usage: rns (scan | list | help | version | explain)");
     println!("    rns scan [single] IP [mask NETMASK] (ports (std | nmap | RANGE | LIST | all) | mac-only) [scan-mac] [host-timeout TIMEOUT] [port-timeout TIMEOUT] [FLAGS]");
-    println!("    rns list [ports [tcp | udp] | addresses | interfaces]");
+    println!("    rns list [ports [tcp | udp] | addresses | interfaces | routes]");
     println!("    rns help");
     println!("    rns version");
     println!("    rns explain");

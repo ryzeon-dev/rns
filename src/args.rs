@@ -22,6 +22,7 @@ pub struct Args {
     pub listProtocol: String,
     pub listAddresses: bool,
     pub listInterfaces: bool,
+    pub listRoutes: bool,
 
     pub quiet: bool,
     pub json: bool,
@@ -50,6 +51,7 @@ impl Args {
             listProtocol: String::new(),
             listAddresses: false,
             listInterfaces: false,
+            listRoutes: false,
 
             quiet: false,
             json: false,
@@ -387,9 +389,11 @@ impl Args {
             } else if following == "interfaces".to_string() {
                 arguments.listInterfaces = true;
 
+            } else if following == "routes".to_string() {
+                arguments.listRoutes = true;
 
             } else {
-                eprintln!("Expecting either `ports`, `addresses` or `interfaces` after `list`");
+                eprintln!("Expecting either `ports`, `addresses`, `interfaces` or `routes` after `list`");
                 std::process::exit(1);
             }
 
