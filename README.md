@@ -135,6 +135,11 @@ rns scan single 192.168.1.16 ports std
 rns l interfaces
 ```
 
+- to export the listing into a Json file, use the `--json` or `-j` flag
+```
+rns list ports -j > report.json
+```
+
 #### Locally open ports
 - to list the ports openend on local machine, use the `list ports` verb, and both TCP and UDP open ports will be shown
 ```

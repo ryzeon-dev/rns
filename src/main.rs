@@ -22,7 +22,7 @@ use ipv4Utils::{*};
 use utils::{*};
 use crate::routeUtils::getRoutes;
 
-const VERSION: &str = "0.9.8";
+const VERSION: &str = "0.9.9";
 
 fn explainPorts() {
     println!("Standard ports explanation:");
@@ -258,52 +258,255 @@ fn listCommand(arguments: args::Args) {
         let tcpMap = parseFile("/proc/net/tcp".to_string(), true);
         let udpMap = parseFile("/proc/net/udp".to_string(), false);
 
-        if arguments.listProtocol == String::from("tcp") {
-            println!("{:15} : {:5}", "ADDRESS", "PORT");
-            for (inode, (address, port)) in tcpMap {
-                println!("{:15} : {:5}", address, port);
+        if arguments.json {
+            let mut json = rsjson::Json::new();
+
+            if arguments.listProtocol == String::from("tcp") {
+                let mut tcpNodes = Vec::new();
+
+                for (inode, (address, port)) in tcpMap {
+                    let mut nodeContent = rsjson::Json::new();
+
+                    nodeContent.addNode(Node::new(
+                        "address",
+                        NodeContent::String(address)
+                    ));
+
+                    nodeContent.addNode(Node::new(
+                        "port",
+                        NodeContent::Int(port.parse::<usize>().unwrap())
+                    ));
+
+                    tcpNodes.push(NodeContent::Json(nodeContent));
+                }
+
+                json.addNode(Node::new(
+                    "tcp",
+                    NodeContent::List(tcpNodes)
+                ));
+
+            } else if arguments.listProtocol == String::from("udp") {
+                let mut udpNodes = Vec::new();
+
+                for (inode, (address, port)) in tcpMap {
+                    let mut nodeContent = rsjson::Json::new();
+
+                    nodeContent.addNode(Node::new(
+                        "address",
+                        NodeContent::String(address)
+                    ));
+
+                    nodeContent.addNode(Node::new(
+                        "port",
+                        NodeContent::Int(port.parse::<usize>().unwrap())
+                    ));
+
+                    udpNodes.push(NodeContent::Json(nodeContent));
+                }
+
+                json.addNode(Node::new(
+                    "udp",
+                    NodeContent::List(udpNodes)
+                ));
+
+            } else if arguments.listProtocol.is_empty() {
+                let mut tcpNodes = Vec::new();
+
+                for (inode, (address, port)) in tcpMap {
+                    let mut nodeContent = rsjson::Json::new();
+
+                    nodeContent.addNode(Node::new(
+                        "address",
+                        NodeContent::String(address)
+                    ));
+
+                    nodeContent.addNode(Node::new(
+                        "port",
+                        NodeContent::Int(port.parse::<usize>().unwrap())
+                    ));
+
+                    tcpNodes.push(NodeContent::Json(nodeContent));
+                }
+
+                json.addNode(Node::new(
+                    "tcp",
+                    NodeContent::List(tcpNodes)
+                ));
+
+                let mut udpNodes = Vec::new();
+
+                for (inode, (address, port)) in udpMap {
+                    let mut nodeContent = rsjson::Json::new();
+
+                    nodeContent.addNode(Node::new(
+                        "address",
+                        NodeContent::String(address)
+                    ));
+
+                    nodeContent.addNode(Node::new(
+                        "port",
+                        NodeContent::Int(port.parse::<usize>().unwrap())
+                    ));
+
+                    udpNodes.push(NodeContent::Json(nodeContent));
+                }
+
+                json.addNode(Node::new(
+                    "udp",
+                    NodeContent::List(udpNodes)
+                ));
             }
 
-        } else if arguments.listProtocol == String::from("udp") {
-            println!("{:15} : {:5}", "ADDRESS", "PORT");
-            for (inode, (address, port)) in udpMap {
-                println!("{:15} : {:5}", address, port);
-            }
+            println!("{}", json.toString());
 
-        } else if arguments.listProtocol.is_empty() {
-            println!("{:15} : {:5}", "ADDRESS", "PORT");
-            println!("TCP");
+        } else {
+            if arguments.listProtocol == String::from("tcp") {
+                println!("{:15} : {:5}", "ADDRESS", "PORT");
+                for (inode, (address, port)) in tcpMap {
+                    println!("{:15} : {:5}", address, port);
+                }
 
-            for (inode, (address, port)) in tcpMap {
-                println!("{:15} : {:5}", address, port);
-            }
+            } else if arguments.listProtocol == String::from("udp") {
+                println!("{:15} : {:5}", "ADDRESS", "PORT");
+                for (inode, (address, port)) in udpMap {
+                    println!("{:15} : {:5}", address, port);
+                }
 
-            println!("UDP");
-            for (inode, (address, port)) in udpMap {
-                println!("{:15} : {:5}", address, port);
+            } else if arguments.listProtocol.is_empty() {
+                println!("{:15} : {:5}", "ADDRESS", "PORT");
+                println!("TCP");
+
+                for (inode, (address, port)) in tcpMap {
+                    println!("{:15} : {:5}", address, port);
+                }
+
+                println!("UDP");
+                for (inode, (address, port)) in udpMap {
+                    println!("{:15} : {:5}", address, port);
+                }
             }
         }
 
     } else if arguments.listAddresses {
         let addresses = sysutil::getIPv4();
 
-        for address in addresses {
-            println!("{}/{} -> {}", address.address, address.cidr,  address.interface);
+        if arguments.json {
+            let mut json = rsjson::Json::new();
+
+            for address in addresses  {
+                let mut nodeContent = rsjson::Json::new();
+
+                nodeContent.addNode(Node::new(
+                    "cidr",
+                    NodeContent::Int(address.cidr.parse::<usize>().unwrap())
+                ));
+
+                nodeContent.addNode(Node::new(
+                    "interface",
+                    NodeContent::String(address.interface)
+                ));
+
+                json.addNode(Node::new(
+                    address.address,
+                    NodeContent::Json(nodeContent)
+                ));
+            }
+
+            println!("{}", json.toString());
+
+        } else {
+            for address in addresses {
+                println!("{}/{} -> {}", address.address, address.cidr, address.interface);
+            }
         }
+
     } else if arguments.listInterfaces {
         let interfaces = sysutil::networkInterfaces();
 
-        for interface in interfaces {
-            println!("{} -> {} ({} interface)", interface.name, interface.macAddress, match interface.interfaceType {
-                sysutil::InterfaceType::Virtual => "virtual",
-                sysutil::InterfaceType::Physical => "physical",
-            });
+        if arguments.json {
+            let mut json = rsjson::Json::new();
+
+            for interface in interfaces {
+                let mut nodeContent = rsjson::Json::new();
+
+                nodeContent.addNode(Node::new(
+                    "mac",
+                    NodeContent::String(interface.macAddress)
+                ));
+
+                nodeContent.addNode(Node::new(
+                    "type",
+                    NodeContent::String(match interface.interfaceType {
+                        sysutil::InterfaceType::Virtual => "virtual",
+                        sysutil::InterfaceType::Physical => "physical",
+                    }.to_string())
+                ));
+
+                json.addNode(Node::new(
+                    interface.name,
+                    NodeContent::Json(nodeContent)
+                ));
+            }
+            println!("{}", json.toString());
+
+        } else {
+            for interface in interfaces {
+                println!("{} -> {} ({} interface)", interface.name, interface.macAddress, match interface.interfaceType {
+                    sysutil::InterfaceType::Virtual => "virtual",
+                    sysutil::InterfaceType::Physical => "physical",
+                });
+            }
         }
+
     } else if arguments.listRoutes {
         let routes = getRoutes();
 
-        for route in routes {
-            println!("iface {} {} -> {} mask {} metric {}", route.0, route.1, route.2, route.4, route.3);
+        if arguments.json {
+            let mut json = rsjson::Json::new();
+            let mut routesList = Vec::new();
+
+            for route in routes {
+                let mut nodeContent = rsjson::Json::new();
+
+                nodeContent.addNode(Node::new(
+                    "interface",
+                    NodeContent::String(route.0)
+                ));
+
+                nodeContent.addNode(Node::new(
+                    "destination",
+                    NodeContent::String(route.1)
+                ));
+
+                nodeContent.addNode(Node::new(
+                    "gateway",
+                    NodeContent::String(route.2)
+                ));
+
+                nodeContent.addNode(Node::new(
+                    "mask",
+                    NodeContent::String(route.4)
+                ));
+
+                nodeContent.addNode(Node::new(
+                    "metric",
+                    NodeContent::Int(route.3.parse::<usize>().unwrap())
+                ));
+
+                routesList.push(NodeContent::Json(nodeContent));
+            }
+
+            json.addNode(Node::new(
+                "routes",
+                NodeContent::List(routesList)
+            ));
+
+            println!("{}", json.toString());
+
+        } else {
+            for route in routes {
+                println!("iface {} {} -> {} mask {} metric {}", route.0, route.1, route.2, route.4, route.3);
+            }
         }
     }
 }
@@ -312,7 +515,7 @@ fn printHelp() {
     println!("rns: Rust Network Scan version {VERSION}");
     println!("usage: rns (scan | list | help | version | explain)");
     println!("    rns scan [single] IP [mask NETMASK] (ports (std | nmap | RANGE | LIST | all) | mac-only) [scan-mac] [host-timeout TIMEOUT] [port-timeout TIMEOUT] [FLAGS]");
-    println!("    rns list [ports [tcp | udp] | addresses | interfaces | routes]");
+    println!("    rns list [ports [tcp | udp] | addresses | interfaces | routes] [-j | --json]");
     println!("    rns help");
     println!("    rns version");
     println!("    rns explain");
