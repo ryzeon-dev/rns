@@ -22,7 +22,7 @@ use ipv4Utils::{*};
 use utils::{*};
 use crate::routeUtils::getRoutes;
 
-const VERSION: &str = "0.10.0";
+const VERSION: &str = "0.10.1";
 
 fn explainPorts() {
     println!("Standard ports explanation:");
