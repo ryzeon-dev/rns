@@ -6,7 +6,6 @@ pub mod args;
 mod ipv4Utils;
 mod utils;
 mod routeUtils;
-mod ping;
 
 use std::net::{SocketAddr, TcpStream, Shutdown, Ipv4Addr};
 use std::time::Duration;
@@ -22,7 +21,6 @@ use rsjson::{Node, NodeContent};
 use ipv4Utils::{*};
 use utils::{*};
 use crate::routeUtils::getRoutes;
-use crate::ping::ping;
 
 const VERSION: &str = "0.10.0";
 
@@ -50,42 +48,31 @@ fn explainPorts() {
 
 fn check(
     ip: Vec<u8>, threads: Arc<Mutex<usize>>, report: Arc<Mutex<Vec<String>>>,
-    jsonReport: Arc<Mutex<rsjson::Json>>, arguments: args::Args, uid: usize) {
+    jsonReport: Arc<Mutex<rsjson::Json>>, arguments: args::Args) {
     *threads.lock().unwrap() += 1;
 
     let formattedIP = {[ip[0], ip[1], ip[2], ip[3]]};
     let addr = &SocketAddr::from((formattedIP, 80));
 
-    if uid == 0 {
-        if ! ping(formattedIP, Duration::from_millis(arguments.hostTimeout), 5) {
-            if !arguments.quiet && !arguments.json {
-                println!("[x] {} non responsive", ipToString(&ip));
-            }
-
-            *threads.lock().unwrap() -= 1;
-            return
-        }
-    } else {
-        match TcpStream::connect_timeout(
-            addr,
-            Duration::from_millis(arguments.hostTimeout)
-        ) {
-            Err(why) => {
-                match why.kind() {
-                    std::io::ErrorKind::ConnectionRefused => {},
-                    _ => {
-                        if !arguments.quiet && !arguments.json {
-                            println!("[x] {} non responsive", ipToString(&ip));
-                        }
-
-                        *threads.lock().unwrap() -= 1;
-                        return
+    match TcpStream::connect_timeout(
+        addr,
+        Duration::from_millis(arguments.hostTimeout)
+    ) {
+        Err(why) => {
+            match why.kind() {
+                std::io::ErrorKind::ConnectionRefused => {},
+                _ => {
+                    if !arguments.quiet && !arguments.json {
+                        println!("[x] {} non responsive", ipToString(&ip));
                     }
-                }
-            },
 
-            Ok(_sock) => {}
-        }
+                    *threads.lock().unwrap() -= 1;
+                    return
+                }
+            }
+        },
+
+        Ok(_sock) => {}
     }
 
     if !arguments.json && !arguments.quiet {
@@ -607,7 +594,7 @@ fn main() {
 
         check(
             makeu8Vec(arguments.ip.to_owned()), threads, Arc::clone(&report),
-            Arc::clone(&jsonReport), arguments.clone(), uid
+            Arc::clone(&jsonReport), arguments.clone()
         );
 
         if arguments.json {
@@ -686,7 +673,7 @@ fn main() {
 
         thread::spawn(move ||{
             check(
-                ipClone, mutexClone, reportClone, jsonReportClone, argumentsClone, uid
+                ipClone, mutexClone, reportClone, jsonReportClone, argumentsClone
             );
         });
 
