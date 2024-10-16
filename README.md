@@ -19,6 +19,11 @@ cargo
 make
 ```
 
+## Install from Cargo
+```
+cargo install rns
+```
+
 ## Compile and install
 ### One-liner
 ```
