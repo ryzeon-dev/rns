@@ -88,3 +88,19 @@ pub fn parseFile(filePath: String, tcp: bool) -> HashMap<String, (String, String
 
     map
 }
+
+pub fn getUid() -> usize {
+    let pid = std::process::id();
+    let pidStatus = fs::read_to_string(format!("/proc/{}/status", pid));
+
+    let mut uidLine = String::new();
+
+    for line in pidStatus.unwrap().split("\n") {
+        if line.contains("Uid") {
+            uidLine = line.to_string();
+        }
+    }
+
+    let uidChunks = uidLine.split("\t").collect::<Vec<&str>>();
+    return uidChunks.get(1).unwrap().trim().parse::<usize>().unwrap();
+}

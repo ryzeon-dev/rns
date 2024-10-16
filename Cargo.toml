@@ -1,6 +1,6 @@
 [package]
 name = "rns"
-version = "0.9.9"
+version = "0.10.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -10,3 +10,4 @@ regex = "1.10.5"
 arp-toolkit = {version = "0.3.2", features = ["sync"]}
 sysutil = "0.5.4"
 rsjson = "0.5.1"
+icmp = "0.3.0"

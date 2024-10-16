@@ -68,6 +68,8 @@ rns s 192.168.1.0 mask 24 ports all
 ```
 
 #### Network Scanning
+- when scanning as root, icmp packets are used to define if a host is responsive, otherwise a simple TCP socket 
+
 - you must provide an IP address, a network mask (ip address or CIDR form) and some ports to scan
 ```
 rns scan 192.168.1.0 mask 24 ports std
