@@ -1,5 +1,5 @@
 use icmp;
-use std::net::{IpAddr, Ipv4Addr};
+use std::net::{IpAddr};
 use std::time::Duration;
 
 pub fn ping(target: [u8; 4], timeout: Duration, count: usize) -> bool {

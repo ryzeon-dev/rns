@@ -8,7 +8,7 @@ mod utils;
 mod routeUtils;
 mod ping;
 
-use std::net::{SocketAddr, TcpStream, Shutdown, Ipv4Addr, IpAddr};
+use std::net::{SocketAddr, TcpStream, Shutdown, Ipv4Addr};
 use std::time::Duration;
 use std::{thread};
 use std::str::FromStr;
