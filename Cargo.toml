@@ -3,7 +3,7 @@ name = "rns"
 version = "0.10.0"
 edition = "2021"
 description = "Network scanning tool written in Rust"
-license = "AGPL-3"
+license = "AGPL-3.0-or-later"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
