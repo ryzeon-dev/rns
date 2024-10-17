@@ -22,7 +22,7 @@ use ipv4Utils::{*};
 use utils::{*};
 use crate::routeUtils::getRoutes;
 
-const VERSION: &str = "0.10.1";
+const VERSION: &str = "0.11.0";
 
 fn explainPorts() {
     println!("Standard ports explanation:");
@@ -52,7 +52,7 @@ fn check(
     *threads.lock().unwrap() += 1;
 
     let formattedIP = {[ip[0], ip[1], ip[2], ip[3]]};
-    let addr = &SocketAddr::from((formattedIP, 80));
+    let addr = &SocketAddr::from((formattedIP, 0));
 
     match TcpStream::connect_timeout(
         addr,
@@ -509,15 +509,80 @@ fn listCommand(arguments: args::Args) {
     }
 }
 
+fn monitorCommand(arguments: args::Args) {
+    let sysfsDir = "/sys/class/net/";
+    let interfaces = std::fs::read_dir(sysfsDir);
+
+    let mut found = false;
+
+    for interface in interfaces.unwrap() {
+        if interface.unwrap().file_name().to_str().unwrap() == arguments.monitorInterface {
+            found = true;
+        }
+    }
+
+    if !found {
+        eprintln!("Interface `{}` not found", arguments.monitorInterface);
+        std::process::exit(1);
+    }
+    let mac = std::fs::read_to_string(format!("/sys/class/net/{}/address", arguments.monitorInterface)).unwrap();
+    println!("Interface: {} ({})", arguments.monitorInterface, mac.trim());
+
+    let rxFile = format!("/sys/class/net/{}/statistics/rx_bytes", arguments.monitorInterface);
+    let txFile = format!("/sys/class/net/{}/statistics/tx_bytes", arguments.monitorInterface);
+
+    let mut before = std::time::Instant::now();
+
+    let beforeRx = std::fs::read_to_string(&rxFile).unwrap();
+    let mut beforeRxUsize = beforeRx.trim().parse::<usize>().unwrap();
+
+    let beforeTx = std::fs::read_to_string(&txFile).unwrap();
+    let mut beforeTxUsize = beforeTx.trim().parse::<usize>().unwrap();
+
+    std::thread::sleep(Duration::from_millis(500));
+
+    println!();
+    loop {
+        let after = std::time::Instant::now();
+
+        let afterRx = std::fs::read_to_string(&rxFile).unwrap();
+        let afterRxUsize = afterRx.trim().parse::<usize>().unwrap();
+
+        let afterTx = std::fs::read_to_string(&txFile).unwrap();
+        let afterTxUsize = afterTx.trim().parse::<usize>().unwrap();
+
+        let delta = after - before;
+        let deltams = delta.as_millis();
+
+        let deltaRx = (afterRxUsize - beforeRxUsize) as f32 * 1000_f32 / deltams as f32;
+        let deltaTx = (afterTxUsize - beforeTxUsize) as f32 * 1000_f32 / deltams as f32;
+
+        before = after;
+        beforeRxUsize = afterRxUsize;
+        beforeTxUsize = afterTxUsize;
+
+        if arguments.displayBits {
+            println!("\x1b[1ATX: {}/s RX: {}/s{:10}", formatBits(deltaTx), formatBits(deltaRx), "");
+
+        } else {
+            println!("\x1b[1ATX: {}/s RX: {}/s{:10}", formatBytes(deltaTx), formatBytes(deltaRx), "");
+        }
+
+        std::thread::sleep(Duration::from_millis(500));
+    }
+}
+
 fn printHelp() {
     println!("rns: Rust Network Scan version {VERSION}");
     println!("usage: rns (scan | list | help | version | explain)");
     println!("    rns scan [single] IP [mask NETMASK] (ports (std | nmap | RANGE | LIST | all) | mac-only) [scan-mac] [host-timeout TIMEOUT] [port-timeout TIMEOUT] [FLAGS]");
     println!("    rns list [ports [tcp | udp] | addresses | interfaces | routes] [-j | --json]");
+    println!("    rns monitor INTERFACE [-b | --bit]");
     println!("    rns help");
     println!("    rns version");
     println!("    rns explain");
     println!("flags: ");
+    println!("    -b | --bit      Display monitor output in bits");
     println!("    -j | --json     Output in json format");
     println!("    -q | --quiet    Only output final reports");
     println!("notes: ");
@@ -566,6 +631,11 @@ fn main() {
 
     if arguments.list {
         listCommand(arguments);
+        std::process::exit(0);
+    }
+
+    if arguments.monitor {
+        monitorCommand(arguments);
         std::process::exit(0);
     }
 

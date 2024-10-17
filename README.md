@@ -168,6 +168,16 @@ rns list addresses
 rns list interfaces
 ```
 
+### Monitoring 
+- to monitor an interface's activity use `monitor` verb, followed by the interface's name
+```
+rns monitor eth0
+```
+- activity is displayed in bytes by default, but using `-b` or `--bit` flag, activity gets displayed in bits
+```
+rns monitor eth0 -b
+```
+
 ### Help 
 - run `rns help` to get help
 

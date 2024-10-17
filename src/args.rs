@@ -24,6 +24,10 @@ pub struct Args {
     pub listInterfaces: bool,
     pub listRoutes: bool,
 
+    pub monitor: bool,
+    pub monitorInterface: String,
+    pub displayBits: bool,
+
     pub quiet: bool,
     pub json: bool,
 
@@ -53,6 +57,10 @@ impl Args {
             listInterfaces: false,
             listRoutes: false,
 
+            monitor: false,
+            monitorInterface: String::new(),
+            displayBits: false,
+
             quiet: false,
             json: false,
 
@@ -77,6 +85,9 @@ impl Args {
                 } else if flag == "json" {
                     arguments.json = true;
 
+                } else if flag == "bit" {
+                    arguments.displayBits = true;
+
                 } else {
                     eprintln!("Unrecognized flag `--{}`", flag);
                     std::process::exit(1);
@@ -93,6 +104,9 @@ impl Args {
 
                     } else if letter.to_string() == "j" {
                         arguments.json = true;
+
+                    } else if letter.to_string() == "b" {
+                        arguments.displayBits = true;
 
                     } else {
                         eprintln!("Unrecognized flag `-{}`", letter);
@@ -304,7 +318,6 @@ impl Args {
                 std::process::exit(1);
             }
 
-
             while index < args.len() {
                 let command = args.get(index).unwrap().to_owned();
                 index += 1;
@@ -373,16 +386,14 @@ impl Args {
                 if index < args.len() {
                     let protocol = args.get(index).unwrap().to_owned();
 
-                    if ! ["tcp", "udp"].contains(&protocol.as_str()) {
+                    if !["tcp", "udp"].contains(&protocol.as_str()) {
                         eprintln!("Valid open ports protocols are: tcp, udp");
                         std::process::exit(1);
-
                     } else {
                         arguments.listProtocol = protocol;
                         index += 1;
                     }
                 }
-
             } else if following == "addresses".to_string() {
                 arguments.listAddresses = true;
 
@@ -396,6 +407,19 @@ impl Args {
                 eprintln!("Expecting either `ports`, `addresses`, `interfaces` or `routes` after `list`");
                 std::process::exit(1);
             }
+        } else if command == "monitor".to_string() || command == "m".to_string() {
+            arguments.monitor = true;
+
+            let following = match args.get(index) {
+                None => {
+                    eprintln!("Expecting interface name after `monitor` verb");
+                    std::process::exit(1);
+                },
+                Some(str) => str.to_owned()
+            };
+
+            index += 1;
+            arguments.monitorInterface = following;
 
         } else if command == "help".to_string() || command == "h".to_string() {
             arguments.help = true;

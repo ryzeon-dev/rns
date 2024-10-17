@@ -104,3 +104,51 @@ pub fn getUid() -> usize {
     let uidChunks = uidLine.split("\t").collect::<Vec<&str>>();
     return uidChunks.get(1).unwrap().trim().parse::<usize>().unwrap();
 }
+
+pub fn formatBytes(b: f32) -> String {
+    let mut bytes = b as f32;
+    let mut unit = "B";
+
+    while bytes >= 1024_f32 {
+        bytes /= 1024_f32;
+
+        if unit == "B" {
+            unit = "kiB";
+
+        } else if unit == "kiB" {
+            unit = "MiB";
+
+        } else if unit == "MiB" {
+            unit = "GiB";
+
+        } else if unit == "GiB" {
+            unit = "TiB";
+        }
+    }
+
+    format!("{:.2} {}", bytes, unit)
+}
+
+pub fn formatBits(b: f32) -> String {
+    let mut bits = b * 8 as f32;
+    let mut unit = "b";
+
+    while bits >= 1000_f32 {
+        bits /= 1000_f32;
+
+        if unit == "b" {
+            unit = "kb";
+
+        } else if unit == "kb" {
+            unit = "Mb";
+
+        } else if unit == "Mb" {
+            unit = "Gb";
+
+        } else if unit == "Gb" {
+            unit = "Tb";
+        }
+    }
+
+    format!("{:.2} {}", bits, unit)
+}
