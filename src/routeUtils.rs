@@ -5,7 +5,19 @@ use crate::ipv4Utils::decodeAddress;
 pub fn getRoutes() -> Vec<(String, String, String, String, String)> {
     let mut res = Vec::<(String, String, String, String, String)>::new();
 
-    for line in fs::read_to_string("/proc/net/route").unwrap().split("\n") {
+    let routeFile = fs::read_to_string("/proc/net/route");
+    let routesFileContent = match routeFile {
+        Err(_) => {
+            eprintln!("Impossible to read routes data from procfs");
+            std::process::exit(1);
+        },
+
+        Ok(content) => {
+            content
+        }
+    };
+
+    for line in routesFileContent.split("\n") {
         if line.contains("Iface") || line.is_empty() {
             continue
         }

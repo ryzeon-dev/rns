@@ -9,7 +9,7 @@ mod routeUtils;
 
 use std::net::{SocketAddr, TcpStream, Shutdown, Ipv4Addr};
 use std::time::Duration;
-use std::{thread};
+use std::{fs, thread};
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 use std::thread::sleep;
@@ -22,7 +22,7 @@ use ipv4Utils::{*};
 use utils::{*};
 use crate::routeUtils::getRoutes;
 
-const VERSION: &str = "0.11.0";
+const VERSION: &str = "0.12.0";
 
 fn explainPorts() {
     println!("Standard ports explanation:");
@@ -427,6 +427,15 @@ fn listCommand(arguments: args::Args) {
             for interface in interfaces {
                 let mut nodeContent = rsjson::Json::new();
 
+                let status = match fs::read_to_string(format!("/sys/class/net/{}/operstate", interface.name)) {
+                    Err(_) => {
+                        String::from("unknown")
+                    },
+                    Ok(s) => {
+                        s.trim().to_string()
+                    }
+                };
+
                 nodeContent.addNode(Node::new(
                     "mac",
                     NodeContent::String(interface.macAddress)
@@ -440,19 +449,48 @@ fn listCommand(arguments: args::Args) {
                     }.to_string())
                 ));
 
+                nodeContent.addNode(Node::new(
+                    "status",
+                    NodeContent::String(status)
+                ));
+
                 json.addNode(Node::new(
                     interface.name,
                     NodeContent::Json(nodeContent)
                 ));
+
             }
             println!("{}", json.toString());
 
         } else {
             for interface in interfaces {
-                println!("{} -> {} ({} interface)", interface.name, interface.macAddress, match interface.interfaceType {
-                    sysutil::InterfaceType::Virtual => "virtual",
-                    sysutil::InterfaceType::Physical => "physical",
-                });
+                let status = match fs::read_to_string(format!("/sys/class/net/{}/operstate", interface.name)) {
+                    Err(_) => {
+                        String::from("unknown")
+                    },
+                    Ok(s) => {
+                        s
+                    }
+                };
+
+                println!("{} -> {} ({} interface) status {}",
+                     interface.name,
+                     interface.macAddress,
+
+                     match interface.interfaceType {
+                        sysutil::InterfaceType::Virtual => "virtual",
+                        sysutil::InterfaceType::Physical => "physical",
+                     },
+
+                     match fs::read_to_string(format!("/sys/class/net/{}/operstate", interface.name)) {
+                         Err(_) => {
+                             String::from("unknown")
+                         },
+                         Ok(s) => {
+                             s
+                         }
+                     }.trim()
+                );
             }
         }
 
@@ -511,11 +549,20 @@ fn listCommand(arguments: args::Args) {
 
 fn monitorCommand(arguments: args::Args) {
     let sysfsDir = "/sys/class/net/";
-    let interfaces = std::fs::read_dir(sysfsDir);
+    let interfaces = match std::fs::read_dir(sysfsDir) {
+        Err(_) => {
+            eprintln!("Impossible to read interfaces information from sysfs");
+            std::process::exit(1);
+        },
+
+        Ok(dirs) => {
+            dirs
+        }
+    };
 
     let mut found = false;
 
-    for interface in interfaces.unwrap() {
+    for interface in interfaces {
         if interface.unwrap().file_name().to_str().unwrap() == arguments.monitorInterface {
             found = true;
         }
@@ -572,12 +619,47 @@ fn monitorCommand(arguments: args::Args) {
     }
 }
 
+fn setCommand(arguments: args::Args, uid: usize) {
+    if arguments.setInterfaceStatus {
+        if uid != 0 {
+            eprintln!("This operation requires root privilegies (running with `sudo` might not be enough)");
+            std::process::exit(1);
+        }
+
+        let iface = arguments.setInterfaceName;
+        let requiredStatus = arguments.setInterfaceStatusToBeSet;
+
+        let mut found = false;
+        for dir in std::fs::read_dir("/sys/class/net").unwrap() {
+            if dir.unwrap().file_name().to_str().unwrap().to_string() == iface {
+                found = true;
+                break
+            }
+        }
+
+        if !found {
+            eprintln!("Interface `{}` not found", iface);
+            std::process::exit(1);
+        }
+
+        std::fs::write(
+            format!("/sys/class/net/{}/flags", iface),
+            match requiredStatus.as_str() {
+                "up" => "0x1003",
+                "down" => "0x0",
+                _ => ""
+            }
+        );
+    }
+}
+
 fn printHelp() {
     println!("rns: Rust Network Scan version {VERSION}");
     println!("usage: rns (scan | list | help | version | explain)");
     println!("    rns scan [single] IP [mask NETMASK] (ports (std | nmap | RANGE | LIST | all) | mac-only) [scan-mac] [host-timeout TIMEOUT] [port-timeout TIMEOUT] [FLAGS]");
     println!("    rns list [ports [tcp | udp] | addresses | interfaces | routes] [-j | --json]");
     println!("    rns monitor INTERFACE [-b | --bit]");
+    println!("    rns set interface INTERFACE status STATUS");
     println!("    rns help");
     println!("    rns version");
     println!("    rns explain");
@@ -636,6 +718,11 @@ fn main() {
 
     if arguments.monitor {
         monitorCommand(arguments);
+        std::process::exit(0);
+    }
+
+    if arguments.set {
+        setCommand(arguments, uid);
         std::process::exit(0);
     }
 

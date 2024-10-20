@@ -28,6 +28,12 @@ pub struct Args {
     pub monitorInterface: String,
     pub displayBits: bool,
 
+    pub set: bool,
+    pub setInterface: bool,
+    pub setInterfaceName: String,
+    pub setInterfaceStatus: bool,
+    pub setInterfaceStatusToBeSet: String,
+
     pub quiet: bool,
     pub json: bool,
 
@@ -60,6 +66,12 @@ impl Args {
             monitor: false,
             monitorInterface: String::new(),
             displayBits: false,
+
+            set: false,
+            setInterface: false,
+            setInterfaceName: String::new(),
+            setInterfaceStatus: false,
+            setInterfaceStatusToBeSet: String::new(),
 
             quiet: false,
             json: false,
@@ -420,6 +432,71 @@ impl Args {
 
             index += 1;
             arguments.monitorInterface = following;
+
+        } else if command == "set".to_string() {
+            arguments.set = true;
+
+            let following = match args.get(index) {
+                None => {
+                    eprintln!("Expecting `interface` after `set` verb");
+                    std::process::exit(1);
+                },
+                Some(str) => str.to_owned()
+            };
+            index += 1;
+
+            if following == "interface".to_string() || following == "i".to_string() {
+                arguments.setInterface = true;
+
+                let following = match args.get(index) {
+                    None => {
+                        eprintln!("Expecting interface name after `interface` verb");
+                        std::process::exit(1);
+                    },
+                    Some(str) => str.to_owned()
+                };
+
+                index += 1;
+                arguments.setInterfaceName = following;
+
+                let following = match args.get(index) {
+                    None => {
+                        eprintln!("Expecting `status` after interface name");
+                        std::process::exit(1);
+                    },
+                    Some(str) => str.to_owned()
+                };
+                index += 1;
+
+                if following == "status".to_string() || following == "s".to_string() {
+                    arguments.setInterfaceStatus = true;
+
+                    let following = match args.get(index) {
+                        None => {
+                            eprintln!("Expecting either `up` or `down` after `status` verb");
+                            std::process::exit(1);
+                        },
+                        Some(str) => str.to_owned()
+                    };
+                    index += 1;
+
+                    if ["up", "down"].contains(&following.as_str()) {
+                        arguments.setInterfaceStatusToBeSet = following;
+
+                    } else {
+                        eprintln!("Expecting either `up` or `down` after `status` verb");
+                        std::process::exit(1);
+                    }
+
+                } else {
+                    eprintln!("Expecting `status` after interface name");
+                    std::process::exit(1);
+                }
+
+            } else {
+                eprintln!("Expecting `interface` after `set` verb");
+                std::process::exit(1);
+            }
 
         } else if command == "help".to_string() || command == "h".to_string() {
             arguments.help = true;

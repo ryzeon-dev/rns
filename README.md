@@ -178,6 +178,13 @@ rns monitor eth0
 rns monitor eth0 -b
 ```
 
+### Setting
+- to set an interface's status (such as `up` or `down`), use `set` verb
+  - this operation requires root privilegies, and in some cases running with `sudo` might not be enough
+```
+rns set interface eth0 status up
+```
+
 ### Help 
 - run `rns help` to get help
 

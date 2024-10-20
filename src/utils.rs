@@ -70,7 +70,15 @@ pub fn unpackLine(line: String) -> (String, String, String) {
 
 pub fn parseFile(filePath: String, tcp: bool) -> HashMap<String, (String, String)> {
     let mut map = HashMap::<String, (String, String)>::new();
-    let file = fs::read_to_string(filePath).unwrap();
+    let file = match fs::read_to_string(filePath){
+        Ok(f) => {
+            f
+        },
+        Err(_) => {
+            eprintln!("Impossible to retrieve open ports information from procfs");
+            std::process::exit(1);
+        }
+    };
 
     for line in file.split("\n") {
         if line.is_empty() || !line.contains(":") {
@@ -91,11 +99,18 @@ pub fn parseFile(filePath: String, tcp: bool) -> HashMap<String, (String, String
 
 pub fn getUid() -> usize {
     let pid = std::process::id();
-    let pidStatus = fs::read_to_string(format!("/proc/{}/status", pid));
+    let pidStatusFile = fs::read_to_string(format!("/proc/{}/status", pid));
+
+    let pidStatus = match pidStatusFile {
+        Err(_) => {
+            return 1000;
+        },
+        Ok(fileContent) => fileContent
+    };
 
     let mut uidLine = String::new();
 
-    for line in pidStatus.unwrap().split("\n") {
+    for line in pidStatus.split("\n") {
         if line.contains("Uid") {
             uidLine = line.to_string();
         }
