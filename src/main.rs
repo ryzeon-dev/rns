@@ -22,7 +22,7 @@ use ipv4Utils::{*};
 use utils::{*};
 use crate::routeUtils::getRoutes;
 
-const VERSION: &str = "0.12.0";
+const VERSION: &str = "0.13.0";
 
 fn explainPorts() {
     println!("Standard ports explanation:");
@@ -104,7 +104,7 @@ fn check(
                         match TcpStream::connect_timeout(&SocketAddr::from((formattedIP, *port)), Duration::from_millis(arguments.portTimeout)) {
 
                             Ok(sock) => {
-                                openClone.lock().unwrap().push(*port as u16);
+                                openClone.lock().unwrap().push(*port);
                                 sock.shutdown(Shutdown::Both);
 
                                 if !arguments.quiet && !arguments.json {
@@ -542,6 +542,46 @@ fn listCommand(arguments: args::Args) {
         } else {
             for route in routes {
                 println!("iface {} {} -> {} mask {} metric {}", route.0, route.1, route.2, route.4, route.3);
+            }
+        }
+    } else if arguments.listLocal {
+        if arguments.json {
+            eprintln!("sorry not implemented yet");
+            std::process::exit(1);
+        }
+
+        let interfaces = sysutil::networkInterfaces();
+        let addresses = sysutil::getIPv4();
+        let routes = getRoutes();
+
+        let mut first = true;
+
+        for interface in interfaces {
+            println!("{}{} ({} interface) status {}", if first {first = false; ""} else {"\n"}, interface.name, match interface.interfaceType {
+                    sysutil::InterfaceType::Virtual => "virtual",
+                    sysutil::InterfaceType::Physical => "physical",
+                },
+                match fs::read_to_string(format!("/sys/class/net/{}/operstate", interface.name)) {
+                    Err(_) => {
+                        String::from("unknown")
+                    },
+                    Ok(s) => {
+                        s
+                    }
+                }.trim()
+            );
+            println!("    mac {}", interface.macAddress);
+
+            for address in &addresses {
+                if address.interface == interface.name {
+                    println!("    ipv4 {}/{} broadcast {}", address.address, address.cidr, address.broadcast);
+                }
+            }
+
+            for route in &routes {
+                if route.0 == interface.name {
+                    println!("    route {} -> {} mask {} metric {}", route.1, route.2, route.4, route.3);
+                }
             }
         }
     }

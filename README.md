@@ -168,6 +168,12 @@ rns list addresses
 rns list interfaces
 ```
 
+### All Local Machine Network Data
+- lists network interface, and for each displays mac address, ipv4 and route(s)
+```
+rns list local
+```
+
 ### Monitoring 
 - to monitor an interface's activity use `monitor` verb, followed by the interface's name
 ```

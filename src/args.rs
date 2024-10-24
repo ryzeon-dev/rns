@@ -23,6 +23,7 @@ pub struct Args {
     pub listAddresses: bool,
     pub listInterfaces: bool,
     pub listRoutes: bool,
+    pub listLocal: bool,
 
     pub monitor: bool,
     pub monitorInterface: String,
@@ -62,6 +63,7 @@ impl Args {
             listAddresses: false,
             listInterfaces: false,
             listRoutes: false,
+            listLocal: false,
 
             monitor: false,
             monitorInterface: String::new(),
@@ -384,7 +386,7 @@ impl Args {
 
             let following = match args.get(index) {
                 None => {
-                    eprintln!("Expecting either `ports` or `addresses` after `list`");
+                    eprintln!("Expecting either `ports`, `addresses`, `interfaces`, `routes` or `local` after `list`");
                     std::process::exit(1);
                 },
                 Some(str) => str.to_owned()
@@ -415,8 +417,11 @@ impl Args {
             } else if following == "routes".to_string() {
                 arguments.listRoutes = true;
 
+            } else if following == "local".to_string() {
+                arguments.listLocal = true;
+
             } else {
-                eprintln!("Expecting either `ports`, `addresses`, `interfaces` or `routes` after `list`");
+                eprintln!("Expecting either `ports`, `addresses`, `interfaces`, `routes` or `local` after `list`");
                 std::process::exit(1);
             }
         } else if command == "monitor".to_string() || command == "m".to_string() {
