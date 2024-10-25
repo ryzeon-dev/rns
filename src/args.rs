@@ -394,7 +394,7 @@ impl Args {
 
             index += 1;
 
-            if following == "ports".to_string() {
+            if following == "ports".to_string() || following == "p".to_string() {
                 arguments.listPorts = true;
 
                 if index < args.len() {
@@ -408,22 +408,23 @@ impl Args {
                         index += 1;
                     }
                 }
-            } else if following == "addresses".to_string() {
+            } else if following == "addresses".to_string() || following == "a".to_string() {
                 arguments.listAddresses = true;
 
-            } else if following == "interfaces".to_string() {
+            } else if following == "interfaces".to_string() || following == "i".to_string(){
                 arguments.listInterfaces = true;
 
-            } else if following == "routes".to_string() {
+            } else if following == "routes".to_string() || following == "r".to_string() {
                 arguments.listRoutes = true;
 
-            } else if following == "local".to_string() {
+            } else if following == "local".to_string() || following == "l".to_string(){
                 arguments.listLocal = true;
 
             } else {
                 eprintln!("Expecting either `ports`, `addresses`, `interfaces`, `routes` or `local` after `list`");
                 std::process::exit(1);
             }
+
         } else if command == "monitor".to_string() || command == "m".to_string() {
             arguments.monitor = true;
 

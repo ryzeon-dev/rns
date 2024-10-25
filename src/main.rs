@@ -22,7 +22,7 @@ use ipv4Utils::{*};
 use utils::{*};
 use crate::routeUtils::getRoutes;
 
-const VERSION: &str = "0.13.0";
+const VERSION: &str = "0.13.1";
 
 fn explainPorts() {
     println!("Standard ports explanation:");
@@ -545,42 +545,128 @@ fn listCommand(arguments: args::Args) {
             }
         }
     } else if arguments.listLocal {
-        if arguments.json {
-            eprintln!("sorry not implemented yet");
-            std::process::exit(1);
-        }
-
         let interfaces = sysutil::networkInterfaces();
         let addresses = sysutil::getIPv4();
         let routes = getRoutes();
 
-        let mut first = true;
+        if arguments.json {
+            let mut json = rsjson::Json::new();
 
-        for interface in interfaces {
-            println!("{}{} ({} interface) status {}", if first {first = false; ""} else {"\n"}, interface.name, match interface.interfaceType {
-                    sysutil::InterfaceType::Virtual => "virtual",
-                    sysutil::InterfaceType::Physical => "physical",
-                },
-                match fs::read_to_string(format!("/sys/class/net/{}/operstate", interface.name)) {
-                    Err(_) => {
-                        String::from("unknown")
-                    },
-                    Ok(s) => {
-                        s
+            for interface in interfaces {
+                let mut nodeContent = rsjson::Json::new();
+
+                nodeContent.addNode(Node::new(
+                    "mac",
+                    NodeContent::String(interface.macAddress)
+                ));
+
+                nodeContent.addNode(Node::new(
+                    "type",
+                    NodeContent::String(match interface.interfaceType {
+                        sysutil::InterfaceType::Virtual => "virtual",
+                        sysutil::InterfaceType::Physical => "physical",
+                    }.to_string())
+                ));
+
+                let mut ipv4NodeContent = rsjson::Json::new();
+                for address in &addresses {
+                    if address.interface == interface.name {
+                        ipv4NodeContent.addNode(Node::new(
+                            "address",
+                            NodeContent::String((&address).address.to_string())
+                        ));
+
+                        ipv4NodeContent.addNode(Node::new(
+                            "cidr",
+                            NodeContent::Int((&address).cidr.parse::<usize>().unwrap())
+                        ));
+
+                        ipv4NodeContent.addNode(Node::new(
+                            "broadcast",
+                            NodeContent::String((&address).broadcast.to_string())
+                        ));
+                        break;
                     }
-                }.trim()
-            );
-            println!("    mac {}", interface.macAddress);
-
-            for address in &addresses {
-                if address.interface == interface.name {
-                    println!("    ipv4 {}/{} broadcast {}", address.address, address.cidr, address.broadcast);
                 }
+
+                nodeContent.addNode(Node::new(
+                    "ipv4",
+                    NodeContent::Json(ipv4NodeContent)
+                ));
+
+                let mut routesNodeContent = Vec::<NodeContent>::new();
+
+                for route in &routes {
+                    if route.0 == interface.name {
+                        let mut routeNode = rsjson::Json::new();
+
+                        routeNode.addNode(Node::new(
+                           "destination",
+                           NodeContent::String((&route.1).to_string())
+                        ));
+
+                        routeNode.addNode(Node::new(
+                           "gateway",
+                           NodeContent::String((&route.2).to_string())
+                        ));
+
+                        routeNode.addNode(Node::new(
+                           "netmask",
+                           NodeContent::String((&route.4).to_string())
+                        ));
+
+                        routeNode.addNode(Node::new(
+                           "metric",
+                           NodeContent::Int((&route.3.trim()).parse::<usize>().unwrap())
+                        ));
+
+                        routesNodeContent.push(NodeContent::Json(routeNode));
+                    }
+                }
+
+                nodeContent.addNode(Node::new(
+                    "routes",
+                    NodeContent::List(routesNodeContent)
+                ));
+
+                json.addNode(Node::new(
+                    interface.name,
+                    NodeContent::Json(nodeContent)
+                ));
             }
 
-            for route in &routes {
-                if route.0 == interface.name {
-                    println!("    route {} -> {} mask {} metric {}", route.1, route.2, route.4, route.3);
+            println!("{}", json.toString());
+
+        } else {
+            let mut first = true;
+
+            for interface in interfaces {
+                println!("{}{} ({} interface) status {}", if first { first = false; "" } else { "\n" },
+                     interface.name, match interface.interfaceType {
+                        sysutil::InterfaceType::Virtual => "virtual",
+                        sysutil::InterfaceType::Physical => "physical",
+                    },
+                     match fs::read_to_string(format!("/sys/class/net/{}/operstate", interface.name)) {
+                         Err(_) => {
+                             String::from("unknown")
+                         },
+                         Ok(s) => {
+                             s
+                         }
+                     }.trim()
+                );
+                println!("    mac {}", interface.macAddress);
+
+                for address in &addresses {
+                    if address.interface == interface.name {
+                        println!("    ipv4 {}/{} broadcast {}", address.address, address.cidr, address.broadcast);
+                    }
+                }
+
+                for route in &routes {
+                    if route.0 == interface.name {
+                        println!("    route {} -> {} mask {} metric {}", route.1, route.2, route.4, route.3);
+                    }
                 }
             }
         }
@@ -697,7 +783,7 @@ fn printHelp() {
     println!("rns: Rust Network Scan version {VERSION}");
     println!("usage: rns (scan | list | help | version | explain)");
     println!("    rns scan [single] IP [mask NETMASK] (ports (std | nmap | RANGE | LIST | all) | mac-only) [scan-mac] [host-timeout TIMEOUT] [port-timeout TIMEOUT] [FLAGS]");
-    println!("    rns list [ports [tcp | udp] | addresses | interfaces | routes] [-j | --json]");
+    println!("    rns list [ports [tcp | udp] | addresses | interfaces | routes | local] [-j | --json]");
     println!("    rns monitor INTERFACE [-b | --bit]");
     println!("    rns set interface INTERFACE status STATUS");
     println!("    rns help");
