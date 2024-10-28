@@ -22,7 +22,7 @@ use ipv4Utils::{*};
 use utils::{*};
 use crate::routeUtils::getRoutes;
 
-const VERSION: &str = "0.13.1";
+const VERSION: &str = "0.13.2";
 
 fn explainPorts() {
     println!("Standard ports explanation:");
@@ -666,6 +666,21 @@ fn listCommand(arguments: args::Args) {
                 for route in &routes {
                     if route.0 == interface.name {
                         println!("    route {} -> {} mask {} metric {}", route.1, route.2, route.4, route.3);
+                    }
+                }
+
+                match fs::read_to_string(format!("/sys/class/net/{}/speed", interface.name)) {
+                    Err(_) => {},
+                    Ok(speed) => {
+                        let mut intSpeed = speed.trim().parse::<usize>().unwrap();
+                        let mut unit = "Mb/s";
+
+                        if intSpeed >= 1000 {
+                            intSpeed = intSpeed / 1000;
+                            unit = "Gb/s"
+                        }
+
+                        println!("    link speed {} {}", intSpeed, unit)
                     }
                 }
             }
