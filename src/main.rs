@@ -22,7 +22,7 @@ use ipv4Utils::{*};
 use utils::{*};
 use crate::routeUtils::getRoutes;
 
-const VERSION: &str = "0.13.2";
+const VERSION: &str = "0.13.3";
 
 fn explainPorts() {
     println!("Standard ports explanation:");
@@ -628,6 +628,36 @@ fn listCommand(arguments: args::Args) {
                     "routes",
                     NodeContent::List(routesNodeContent)
                 ));
+
+                nodeContent.addNode(Node::new(
+                    "status",
+                    NodeContent::String(match fs::read_to_string(format!("/sys/class/net/{}/operstate", interface.name)) {
+                        Err(_) => {
+                            String::from("unknown")
+                        },
+                        Ok(s) => {
+                            s
+                        }
+                    }.trim().to_string())
+                ));
+
+                match fs::read_to_string(format!("/sys/class/net/{}/speed", interface.name)) {
+                    Err(_) => {},
+                    Ok(speed) => {
+                        let mut intSpeed = speed.trim().parse::<usize>().unwrap();
+                        let mut unit = "Mb/s";
+
+                        if intSpeed >= 1000 {
+                            intSpeed = intSpeed / 1000;
+                            unit = "Gb/s"
+                        }
+
+                        nodeContent.addNode(Node::new(
+                            "link-speed",
+                            NodeContent::String(format!("{} {}", intSpeed, unit))
+                        ))
+                    }
+                };
 
                 json.addNode(Node::new(
                     interface.name,
