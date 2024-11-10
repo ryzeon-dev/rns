@@ -7,7 +7,7 @@ mod ipv4Utils;
 mod utils;
 mod routeUtils;
 
-use std::net::{SocketAddr, TcpStream, Shutdown, Ipv4Addr};
+use std::net::{SocketAddr, TcpStream, Shutdown, Ipv4Addr, UdpSocket};
 use std::time::Duration;
 use std::{fs, thread};
 use std::str::FromStr;
@@ -22,7 +22,7 @@ use ipv4Utils::{*};
 use utils::{*};
 use crate::routeUtils::getRoutes;
 
-const VERSION: &str = "0.13.3";
+const VERSION: &str = "0.14.0";
 
 fn explainPorts() {
     println!("Standard ports explanation:");
@@ -75,6 +75,24 @@ fn check(
         Ok(_sock) => {}
     }
 
+    let udpSocket = UdpSocket::bind("0.0.0.0:0").unwrap();
+    udpSocket.set_read_timeout(Some(Duration::from_millis(500)));
+    udpSocket.send_to(&[0xF1, 0xF1, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x20, 0x43, 0x4b, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x00, 0x00, 0x21, 0x00, 0x01], format!("{}:137", ipToString(&ip)));
+
+    let mut buffer = [0_u8; 1024];
+    udpSocket.recv_from(&mut buffer);
+
+    let response = bytesToString(&buffer);
+
+    let hostname;
+    if response.is_empty() {
+        hostname = String::new();
+
+    } else {
+        let splitted = response.split("CKAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA!").collect::<Vec<&str>>();
+        hostname = splitted[1].split(" ").collect::<Vec<&str>>()[0].to_string().to_ascii_lowercase();
+    }
+
     if !arguments.json && !arguments.quiet {
         println!("[*] {} found responsive", ipToString(&ip));
     }
@@ -93,6 +111,7 @@ fn check(
 
             while startPortIndex < (&arguments.ports.len()).to_owned() {
                 let runningThreadsClone = runningThreads.clone();
+
                 let openClone = open.clone();
                 let portsClone = arguments.ports.clone();
 
@@ -126,7 +145,6 @@ fn check(
             while *runningThreads.lock().unwrap() > 0 {
                 sleep(Duration::from_millis(100));
             }
-
 
         } else {
             for port in arguments.ports {
@@ -167,9 +185,17 @@ fn check(
             jsonNode.unwrap().toList().unwrap().push(rsjson::NodeContent::Int(port as usize));
         }
 
+        if !hostname.is_empty() {
+            jsonNode.unwrap().toList().unwrap().push(rsjson::NodeContent::String(hostname.clone()));
+        }
+
     } else {
         let mut content = rsjson::Json::new();
         content.addNode(Node::new("mac", NodeContent::String(mac.clone())));
+
+        if !hostname.is_empty() {
+            content.addNode(Node::new("hostname", NodeContent::String(hostname.clone())));
+        }
 
         content.addNode(Node::new("ports", NodeContent::List({
             let mut ports = Vec::<NodeContent>::new();
@@ -191,14 +217,14 @@ fn check(
 
     if arguments.macOnly {
         report.lock().unwrap().push(format!(
-                "[>] Found {}: mac {}", stringedIp,
+                "[>] Found {}{}: mac {}", if hostname.is_empty() { String::new() } else { format!("{} ", hostname) } , stringedIp,
                 if mac.is_empty() { String::from("not found") } else { format!("{}", mac) },
             )
         );
 
     } else {
         report.lock().unwrap().push(format!(
-                "[>] Found {}{} open ports: {:?}", stringedIp,
+                "[>] Found {}{}{} open ports: {:?}", if hostname.is_empty() { String::new() } else { format!("{} at ", hostname) }, stringedIp,
                 if mac.is_empty() { String::new() } else { format!(" ({})", mac) },
                 open.lock().unwrap().to_vec()
             )

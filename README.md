@@ -73,6 +73,7 @@ rns s 192.168.1.0 mask 24 ports all
 ```
 
 #### Network Scanning
+- when scanning for IP addresses, `rns` will try to resolve the ip address into the host name, using the NetBIOS protocol
 - you must provide an IP address, a network mask (ip address or CIDR form) and some ports to scan
 ```
 rns scan 192.168.1.0 mask 24 ports std

@@ -167,3 +167,15 @@ pub fn formatBits(b: f32) -> String {
 
     format!("{:.2} {}", bits, unit)
 }
+
+pub fn bytesToString(buffer: &[u8]) -> String {
+    let mut repr = String::new();
+    
+    for byte in buffer {
+        if byte >= &32 && byte <= &126 {
+            repr = format!("{}{}", repr, byte.to_owned() as char);
+        }
+    }
+    
+    repr
+}
