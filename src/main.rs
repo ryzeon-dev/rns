@@ -22,7 +22,7 @@ use ipv4Utils::{*};
 use utils::{*};
 use crate::routeUtils::getRoutes;
 
-const VERSION: &str = "0.14.0";
+const VERSION: &str = "0.14.1";
 
 fn explainPorts() {
     println!("Standard ports explanation:");
@@ -711,7 +711,10 @@ fn listCommand(arguments: args::Args) {
                          }
                      }.trim()
                 );
-                println!("    mac {}", interface.macAddress);
+                
+                if !interface.macAddress.is_empty() {
+                    println!("    mac {}", interface.macAddress);
+                }
 
                 for address in &addresses {
                     if address.interface == interface.name {
