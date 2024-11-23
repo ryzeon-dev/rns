@@ -22,7 +22,7 @@ use ipv4Utils::{*};
 use utils::{*};
 use crate::routeUtils::getRoutes;
 
-const VERSION: &str = "0.14.1";
+const VERSION: &str = "0.14.2";
 
 fn explainPorts() {
     println!("Standard ports explanation:");
@@ -670,18 +670,26 @@ fn listCommand(arguments: args::Args) {
                 match fs::read_to_string(format!("/sys/class/net/{}/speed", interface.name)) {
                     Err(_) => {},
                     Ok(speed) => {
-                        let mut intSpeed = speed.trim().parse::<usize>().unwrap();
+                        let mut floatSpeed = speed.trim().parse::<f32>().unwrap();
                         let mut unit = "Mb/s";
 
-                        if intSpeed >= 1000 {
-                            intSpeed = intSpeed / 1000;
+                        if floatSpeed >= 1000_f32 {
+                            floatSpeed = floatSpeed / 1000_f32;
                             unit = "Gb/s"
                         }
-
-                        nodeContent.addNode(Node::new(
-                            "link-speed",
-                            NodeContent::String(format!("{} {}", intSpeed, unit))
-                        ))
+                        
+                        if isInt(floatSpeed) {
+                            nodeContent.addNode(Node::new(
+                                "link-speed",
+                                NodeContent::String(format!("{} {}", floatSpeed as usize, unit))
+                            ));
+                        
+                        } else {
+                            nodeContent.addNode(Node::new(
+                                "link-speed",
+                                NodeContent::String(format!("{:.1} {}", floatSpeed, unit))
+                            ));
+                        }
                     }
                 };
 
@@ -726,20 +734,30 @@ fn listCommand(arguments: args::Args) {
                     if route.0 == interface.name {
                         println!("    route {} -> {} mask {} metric {}", route.1, route.2, route.4, route.3);
                     }
-                }
+                };
 
                 match fs::read_to_string(format!("/sys/class/net/{}/speed", interface.name)) {
                     Err(_) => {},
                     Ok(speed) => {
-                        let mut intSpeed = speed.trim().parse::<usize>().unwrap();
+                        let floatSpeed = speed.trim().parse::<f32>();
                         let mut unit = "Mb/s";
 
-                        if intSpeed >= 1000 {
-                            intSpeed = intSpeed / 1000;
-                            unit = "Gb/s"
-                        }
+                        match floatSpeed {
+                            Err(_) => {},
+                            
+                            Ok(mut value) => {
+                                if value >= 1000_f32 {
+                                    value = value / 1000_f32;
+                                    unit = "Gb/s"
+                                }
 
-                        println!("    link speed {} {}", intSpeed, unit)
+                                if isInt(value) {
+                                    println!("    link speed {} {}", value as usize, unit)
+                                } else {
+                                    println!("    link speed {:.1} {}", value as usize, unit)
+                                }
+                            }
+                        }
                     }
                 }
             }

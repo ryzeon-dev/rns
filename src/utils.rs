@@ -179,3 +179,9 @@ pub fn bytesToString(buffer: &[u8]) -> String {
     
     repr
 }
+
+pub fn isInt(value: f32) -> bool {
+    let intValue = value as usize;
+    
+    return value != intValue as f32; 
+}
