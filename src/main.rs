@@ -22,7 +22,7 @@ use ipv4Utils::{*};
 use utils::{*};
 use crate::routeUtils::getRoutes;
 
-const VERSION: &str = "0.14.2";
+const VERSION: &str = "0.14.3";
 
 fn explainPorts() {
     println!("Standard ports explanation:");
@@ -412,7 +412,7 @@ fn listCommand(arguments: args::Args) {
         }
 
     } else if arguments.listAddresses {
-        let addresses = sysutil::getIPv4();
+        let addresses = sysutil::network::getIPv4();
 
         if arguments.json {
             let mut json = rsjson::Json::new();
@@ -445,7 +445,7 @@ fn listCommand(arguments: args::Args) {
         }
 
     } else if arguments.listInterfaces {
-        let interfaces = sysutil::networkInterfaces();
+        let interfaces = sysutil::network::networkInterfaces();
 
         if arguments.json {
             let mut json = rsjson::Json::new();
@@ -470,8 +470,8 @@ fn listCommand(arguments: args::Args) {
                 nodeContent.addNode(Node::new(
                     "type",
                     NodeContent::String(match interface.interfaceType {
-                        sysutil::InterfaceType::Virtual => "virtual",
-                        sysutil::InterfaceType::Physical => "physical",
+                        sysutil::network::InterfaceType::Virtual => "virtual",
+                        sysutil::network::InterfaceType::Physical => "physical",
                     }.to_string())
                 ));
 
@@ -504,8 +504,8 @@ fn listCommand(arguments: args::Args) {
                      interface.macAddress,
 
                      match interface.interfaceType {
-                        sysutil::InterfaceType::Virtual => "virtual",
-                        sysutil::InterfaceType::Physical => "physical",
+                        sysutil::network::InterfaceType::Virtual => "virtual",
+                        sysutil::network::InterfaceType::Physical => "physical",
                      },
 
                      match fs::read_to_string(format!("/sys/class/net/{}/operstate", interface.name)) {
@@ -571,8 +571,8 @@ fn listCommand(arguments: args::Args) {
             }
         }
     } else if arguments.listLocal {
-        let interfaces = sysutil::networkInterfaces();
-        let addresses = sysutil::getIPv4();
+        let interfaces = sysutil::network::networkInterfaces();
+        let addresses = sysutil::network::getIPv4();
         let routes = getRoutes();
 
         if arguments.json {
@@ -589,8 +589,8 @@ fn listCommand(arguments: args::Args) {
                 nodeContent.addNode(Node::new(
                     "type",
                     NodeContent::String(match interface.interfaceType {
-                        sysutil::InterfaceType::Virtual => "virtual",
-                        sysutil::InterfaceType::Physical => "physical",
+                        sysutil::network::InterfaceType::Virtual => "virtual",
+                        sysutil::network::InterfaceType::Physical => "physical",
                     }.to_string())
                 ));
 
@@ -707,8 +707,8 @@ fn listCommand(arguments: args::Args) {
             for interface in interfaces {
                 println!("{}{} ({} interface) status {}", if first { first = false; "" } else { "\n" },
                      interface.name, match interface.interfaceType {
-                        sysutil::InterfaceType::Virtual => "virtual",
-                        sysutil::InterfaceType::Physical => "physical",
+                        sysutil::network::InterfaceType::Virtual => "virtual",
+                        sysutil::network::InterfaceType::Physical => "physical",
                     },
                      match fs::read_to_string(format!("/sys/class/net/{}/operstate", interface.name)) {
                          Err(_) => {
