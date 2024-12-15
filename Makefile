@@ -12,3 +12,15 @@ install-amd64:
 
 install-arm64:
 	cp ./bin/linux_arm64/rns /usr/local/bin
+
+compile-gui:
+	cd ./gui && bash compile.sh
+
+install-gui:
+	cp ./gui/bin/rns-gui /usr/local/bin/rns-gui
+
+install-gui-amd64:
+	cp ./gui/bin/linux_amd64/rns-gui /usr/local/bin/rns-gui
+
+install-gui-arm64:
+	cp ./gui/bin/linux_arm64/rns-gui /usr/local/bin/rns-gui

@@ -1,5 +1,6 @@
 <div style="display: flex; flex-direction: row; justify-content: start">
     <img src="https://img.shields.io/badge/rust-16a085?style=for-the-badge&logo=rust" href="" style="margin: 10px" />
+    <img src="https://img.shields.io/badge/python3-16a085?style=for-the-badge&logo=python" href="" style="margin: 10px" />
     <img src="https://img.shields.io/badge/tcp/ip-16a085?style=for-the-badge" href="" style="margin: 10px" />
     <img src="https://img.shields.io/badge/mac%20address-16a085?style=for-the-badge" href="" style="margin: 10px"/>
     <img src="https://img.shields.io/badge/network%20interfaces-16a085?style=for-the-badge" href="" style="margin: 10px"/>
@@ -63,6 +64,38 @@ sudo make install-amd64
 ### `arm64`
 ```
 sudo make install-arm64
+```
+
+## GUI
+- a GUI application written in Python3 is available
+- the gui allows to execute `scan` and `list` actions
+  - after inserting the required parameters, the relative `rns` command will be displayed
+  - pressing the `run` button, the command will be executed, and its result displayed
+
+### Compile
+- from the `rns` directory, run
+```
+make compile-gui
+```
+
+### Install
+- if you just compiled it, run
+```
+sudo make install-gui
+```
+- if you want to install a precompiled binary, run
+```
+sudo make install-gui-amd64
+```
+or 
+```
+sudo make install-gui-arm64
+```
+
+### Run
+- run the command 
+```
+rns-gui
 ```
 
 ## Usage
