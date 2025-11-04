@@ -1,4 +1,6 @@
 import tkinter as tk
+from tkinter import *
+import tkinter.ttk as ttk
 import time
 from _thread import start_new_thread
 import sys
@@ -364,8 +366,8 @@ class Interface:
                 self.resultFrame.pack(padx=10, pady=10)
 
                 text = json.dumps(json.loads(jsonOutput), indent=4)
-                self.resultFrame.insert(tk.END, text)
 
+                self.resultFrame.insert(tk.END, text)
                 self.resultFrame.configure(state=tk.DISABLED)
 
 if __name__ == '__main__':

@@ -13,5 +13,5 @@ authors = ["ryzeon-dev"]
 [dependencies]
 regex = "1.10.5"
 arp-toolkit = {version = "0.3.2", features = ["sync"]}
-sysutil = "0.6.1"
+sysutil = "0.7.2"
 rsjson = "0.5.1"
